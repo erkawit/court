@@ -54,12 +54,12 @@
         <ul class="sidebar-menu">
           <li class="sidebar-menu-category">เมนูเจ้าหน้าที่ศาล</li>
           <li>
-            <a id="navItemDashboard" href="#" onclick="switchView('dashboard', event)" class="sidebar-item active">
+            <a id="navItemDashboard" href="javascript:void(0)" onclick="switchView('dashboard', event)" class="sidebar-item active">
               <i class="fa-solid fa-chart-line"></i> <span>แดชบอร์ด & ปฏิทิน</span>
             </a>
           </li>
           <li>
-            <a id="navItemRequests" href="#" onclick="switchView('requests', event)" class="sidebar-item">
+            <a id="navItemRequests" href="javascript:void(0)" onclick="switchView('requests', event)" class="sidebar-item">
               <i class="fa-solid fa-folder-open"></i> <span id="navItemRequestsLabel">รายการยื่นคำร้องทั้งหมด</span>
             </a>
           </li>
@@ -67,12 +67,12 @@
           <!-- COURT MENUS -->
           <li id="navCategoryCourt" class="sidebar-menu-category">การจัดการศาล</li>
           <li id="navItemCreateBatch">
-            <a href="#" onclick="openCreateBatchModal(event)" class="sidebar-item">
+            <a href="javascript:void(0)" onclick="openCreateBatchModal(event)" class="sidebar-item">
               <i class="fa-solid fa-file-signature" style="color: #60a5fa;"></i> <span>สร้างชุดเลขคำร้อง (ยฝ./ฝ.)</span>
             </a>
           </li>
           <li id="navItemHolidays">
-            <a href="#" onclick="openHolidayModal(event)" class="sidebar-item">
+            <a href="javascript:void(0)" onclick="openHolidayModal(event)" class="sidebar-item">
               <i class="fa-solid fa-calendar-xmark" style="color: #f87171;"></i> <span>จัดการวันหยุดศาล</span>
             </a>
           </li>
@@ -80,12 +80,12 @@
           <!-- ADMIN MENUS -->
           <li id="navCategoryAdmin" class="sidebar-menu-category" style="display: none;">ผู้ดูแลระบบ</li>
           <li id="navItemUsers" style="display: none;">
-            <a id="navItemUsersLink" href="#" onclick="switchView('admin', event)" class="sidebar-item">
+            <a id="navItemUsersLink" href="javascript:void(0)" onclick="switchView('admin', event)" class="sidebar-item">
               <i class="fa-solid fa-users-gear"></i> <span>จัดการผู้ใช้งาน (Users)</span>
             </a>
           </li>
           <li id="navItemGoogleSettings" style="display: none;">
-            <a id="navItemGoogleSettingsLink" href="#" onclick="openGoogleSettingsModal(event)" class="sidebar-item">
+            <a id="navItemGoogleSettingsLink" href="javascript:void(0)" onclick="openGoogleSettingsModal(event)" class="sidebar-item">
               <i class="fa-solid fa-file-excel" style="color: #34d399;"></i> <span>เชื่อมต่อ Google Services</span>
             </a>
           </li>
@@ -106,8 +106,8 @@
       <button id="mbNavRequests" onclick="switchView('requests', event)" class="bnav-item" title="รายการคำร้องทั้งหมด">
         <i class="fa-solid fa-folder-open"></i>
       </button>
-      <button id="mbNavCreateBatch" onclick="openCreateBatchModal(event)" class="bnav-item" title="สร้างชุดเลขคำร้อง (ยฝ./ฝ.)">
-        <i class="fa-solid fa-file-signature"></i>
+      <button id="mbNavHolidays" onclick="openHolidayModal(event)" class="bnav-item" title="จัดการวันหยุดศาล">
+        <i class="fa-solid fa-calendar-xmark"></i>
       </button>
       <button id="mbNavAdmin" onclick="switchView('admin', event)" class="bnav-item" style="display: none;" title="จัดการผู้ใช้งาน">
         <i class="fa-solid fa-users-gear"></i>
@@ -124,7 +124,7 @@
       <div id="dashboardView" class="animate-fade-in" style="display: none;">
         <div class="view-header">
           <div class="view-title">
-            <h2 id="dashboardTitle"><i class="fa-solid fa-chart-line" style="color: var(--primary);"></i> แดชบอร์ดภาพรวมและปฏิทินกำหนดวันยื่นฝากขัง</h2>
+            <h2 id="dashboardTitle"><i class="fa-solid fa-chart-line" style="color: var(--primary);"></i> แดชบอร์ดกำหนดวันยื่นฝากขัง - เจ้าหน้าที่ศาล</h2>
             <p id="dashboardSubtitle">คำนวณวันยื่นล่วงหน้า 1 วันทำการและเวลาตัดยื่น 16.00 น. ตามระเบียบศาลจังหวัดอุดรธานี พ.ศ. 2569</p>
           </div>
           <div style="display: flex; gap: 0.5rem;">
@@ -215,17 +215,97 @@
         <div id="courtRequestsSection">
           <div class="view-header">
             <div class="view-title">
-              <h2><i class="fa-solid fa-gavel" style="color: var(--primary);"></i> รายการยื่นคำร้องขอฝากขังทั้งหมด (ฝั่งศาล)</h2>
+              <h2><i class="fa-solid fa-gavel" style="color: var(--primary);"></i> รายการกำหนดเลขคำร้องขอฝากขังของศาล</h2>
               <p>คำนวณวันยื่นล่วงหน้า 1 วันทำการ ตรวจสอบเอกสาร PDF ยืนยันรับเรื่อง ปรับเพดานฝากขัง และแจ้งไฟล์ผิด</p>
             </div>
             <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-              <button onclick="openCreateBatchModal(event)" class="btn-primary" style="width: auto;">
-                <i class="fa-solid fa-file-signature"></i> สร้างชุดเลขคำร้อง (ยฝ./ฝ.)
-              </button>
               <button onclick="fetchLiveGoogleSheetData({ isManual: true })" class="btn-secondary" style="width: auto;">
                 <i class="fa-solid fa-rotate" style="color: #ffffff;"></i> ซิงค์ Google Sheet
               </button>
             </div>
+          </div>
+
+          <!-- Inline Batch Case Creation & Station Pairing Panel (Matching Image Workflow) -->
+          <div class="white-panel" style="padding: 1.5rem; margin-bottom: 1.5rem; border-top: 4px solid var(--primary);">
+            
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem; border-bottom: 1px dashed #cbd5e1; padding-bottom: 0.85rem; margin-bottom: 1rem;">
+              <h3 style="font-size: 1.15rem; font-weight: 700; color: var(--primary); display: flex; align-items: center; gap: 0.5rem; margin: 0;">
+                <i class="fa-solid fa-plus" style="color: var(--accent-gold);"></i> เพิ่มคำร้องฝากขังครั้งที่ 1
+              </h3>
+              <div style="font-size: 0.825rem; color: var(--text-muted); font-weight: 500;">
+                รอจับคู่ สภ. <span id="summaryUnassignedCount" class="badge badge-status-due" style="margin: 0 0.25rem;">0</span> · 
+                รอพนักงานรับ <span id="summaryUnclaimedCount" class="badge badge-status-uploaded" style="margin: 0 0.25rem;">0</span>
+              </div>
+            </div>
+
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.25rem; line-height: 1.5;">
+              ลงข้อมูลฝากขังครั้งแรก — ระบบคำนวณวันครบกำหนด/วันต้องยื่นครั้งต่อไปให้ทันที ไม่ต้องรอจับคู่สถานีหรือรอพนักงานมารับก่อน
+            </p>
+
+            <form onsubmit="handleCreateBatch(event)">
+              <div class="form-row" style="margin-bottom: 1rem;">
+                <div class="form-group" style="flex: 1.5; min-width: 180px;">
+                  <label for="batchTypeSelect"><i class="fa-solid fa-tag"></i> ประเภท</label>
+                  <select id="batchTypeSelect" class="form-control" required>
+                    <option value="ยฝ.">ยฝ. (คดียาเสพติด)</option>
+                    <option value="ฝ.">ฝ. (คดีทั่วไป)</option>
+                  </select>
+                </div>
+
+                <div class="form-group" style="flex: 1; min-width: 110px;">
+                  <label for="batchStartNumInput">เลขเริ่ม</label>
+                  <input type="number" id="batchStartNumInput" class="form-control" placeholder="1" min="1" required>
+                </div>
+
+                <div class="form-group" style="flex: 1; min-width: 110px;">
+                  <label for="batchEndNumInput">ถึงเลข</label>
+                  <input type="number" id="batchEndNumInput" class="form-control" placeholder="50" min="1" required>
+                </div>
+
+                <div class="form-group" style="flex: 1; min-width: 110px;">
+                  <label for="batchYearInput">ปี พ.ศ.</label>
+                  <input type="number" id="batchYearInput" class="form-control" value="2569" required>
+                </div>
+              </div>
+
+              <div class="form-group" style="margin-bottom: 1.25rem;">
+                <label for="batchStartDateInput"><i class="fa-solid fa-calendar-day"></i> วันที่ฝากขังครั้งแรก (ใช้คำนวณวันครบกำหนดครั้งที่ 2)</label>
+                <input type="text" id="batchStartDateInput" class="form-control thai-datepicker" required>
+              </div>
+
+              <div style="margin-bottom: 1.5rem;">
+                <button type="submit" class="btn-primary" style="width: 100%; padding: 0.75rem; font-size: 1rem; font-weight: 700; background: linear-gradient(135deg, #1e3a8a, #1d4ed8);">
+                  <i class="fa-solid fa-layer-group"></i> สร้างชุดคดี
+                </button>
+              </div>
+            </form>
+
+            <div style="border-top: 1px dashed #e2e8f0; padding-top: 1.25rem; margin-top: 1rem;">
+              <!-- Section 1: Assigned to station, waiting for police claim -->
+              <div style="margin-bottom: 1.5rem;">
+                <h4 style="font-size: 0.95rem; font-weight: 700; color: #475569; margin-bottom: 0.75rem;">
+                  <i class="fa-solid fa-user-clock" style="color: #d97706;"></i> จับคู่สถานีแล้ว รอพนักงานสอบสวนมารับเป็นเจ้าของคดี (<span id="countAssignedUnclaimed">0</span> คดี)
+                </h4>
+                <div id="containerAssignedUnclaimed">
+                  <div style="text-align: center; padding: 1rem; color: #94a3b8; font-size: 0.85rem; background: #f8fafc; border-radius: 0.5rem;">
+                    ไม่มีคดีที่รอพนักงานรับตอนนี้
+                  </div>
+                </div>
+              </div>
+
+              <!-- Section 2: Unassigned cases waiting for station pairing -->
+              <div>
+                <h4 style="font-size: 0.95rem; font-weight: 700; color: #475569; margin-bottom: 0.75rem;">
+                  <i class="fa-solid fa-link" style="color: #2563eb;"></i> จับคู่คดีกับสถานี — แยกเป็นชุดตามที่สร้างแต่ละครั้ง (<span id="countUnassignedTotal">0</span> คดีรอจับคู่ทั้งหมด)
+                </h4>
+                <div id="containerUnassignedBatches">
+                  <div style="text-align: center; padding: 1rem; color: #94a3b8; font-size: 0.85rem; background: #f8fafc; border-radius: 0.5rem;">
+                    ไม่มีเลขที่รอจับคู่สถานี
+                  </div>
+                </div>
+              </div>
+            </div>
+
           </div>
 
           <div class="white-panel" style="padding: 1.5rem;">
@@ -240,15 +320,14 @@
 
                 <select id="courtStatusFilter" onchange="renderCourtRequestsTable()" class="form-control" style="width: 160px;">
                   <option value="">ทุกสถานะ</option>
-                  <option value="due">ต้องยื่นเร็วๆ นี้</option>
-                  <option value="uploaded">อัพโหลดแล้ว (รอเปิดดู)</option>
-                  <option value="downloaded">ดาวน์โหลดแล้ว (รอรับเรื่อง)</option>
-                  <option value="blocked">เกินเวลาตัดยื่น (16.00 น.)</option>
-                  <option value="closed">ปิดคดีแล้ว</option>
+                  <option value="uploaded">ยื่นแล้ว</option>
+                  <option value="due">ใกล้ครบกำหนด</option>
+                  <option value="blocked">เลยเวลา</option>
+                  <option value="pending">รอถึงกำหนด</option>
                 </select>
 
                 <div style="position: relative;">
-                  <input type="text" id="courtSearchInput" oninput="renderCourtRequestsTable()" class="form-control" placeholder="ค้นหาเลขฝากขัง/สถานี..." style="padding-left: 2.2rem; width: 200px;">
+                  <input type="text" id="courtSearchInput" oninput="renderCourtRequestsTable()" class="form-control" placeholder="ค้นหาเลขคดี / สถานี / ชื่อพนักงาน" style="padding-left: 2.2rem; width: 220px;">
                   <i class="fa-solid fa-magnifying-glass" style="position: absolute; left: 0.8rem; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 0.85rem;"></i>
                 </div>
               </div>
@@ -362,7 +441,7 @@
           <div class="form-group">
             <label for="batchTypeSelect"><i class="fa-solid fa-tag"></i> อักษรย่อฝากขัง</label>
             <select id="batchTypeSelect" class="form-control" required>
-              <option value="ฝ.">ฝ. = ฝากขังคดีที่ไม่ใช่ยาเสพติด</option>
+              <option value="ฝ.">ฝ. = ฝากขังคดีทั่วไป</option>
               <option value="ยฝ.">ยฝ. = ฝากขังคดียาเสพติด</option>
             </select>
           </div>
@@ -409,7 +488,7 @@
   <div id="holidayModal" class="modal-overlay">
     <div class="glass-panel modal-container" style="max-width: 620px;">
       <div class="modal-header">
-        <h3 style="font-size: 1.2rem; font-weight: 700;"><i class="fa-solid fa-calendar-xmark" style="color: #f87171;"></i> จัดการวันหยุดศาล (Court Holidays)</h3>
+        <h3 style="font-size: 1.2rem; font-weight: 700;"><i class="fa-solid fa-calendar-xmark" style="color: #f87171;"></i> กำหนดวันหยุดราชการ (Government Holidays)</h3>
         <button onclick="closeModal('holidayModal')" class="modal-close"><i class="fa-solid fa-xmark"></i></button>
       </div>
 
@@ -421,7 +500,7 @@
           </div>
           <div class="form-group" style="flex: 2;">
             <label for="holidayNameInput"><i class="fa-solid fa-tag"></i> ชื่อวันหยุด</label>
-            <input type="text" id="holidayNameInput" class="form-control" placeholder="เช่น วันหยุดชดเชยวันแรงงาน" required>
+            <input type="text" id="holidayNameInput" class="form-control" placeholder="เช่น วันเฉลิมพระชนมพรรษา" required>
           </div>
         </div>
         <div style="text-align: right;">
