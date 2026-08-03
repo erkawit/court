@@ -64,17 +64,68 @@ const THAI_MONTHS_FULL = [
 
 // ใช้องค์ประกอบวันที่แบบ local time เสมอ ไม่ใช้ .toISOString()
 // พร้อมระบบป้องกันข้อผิดพลาด ป้องกันการเกิด "NaN-NaN-NaN"
+function normalizeToISO(dateVal) {
+  if (!dateVal) return toISO(new Date());
+  if (dateVal instanceof Date) {
+    if (isNaN(dateVal.getTime())) return toISO(new Date());
+    const y = dateVal.getFullYear();
+    const m = String(dateVal.getMonth() + 1).padStart(2, "0");
+    const day = String(dateVal.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  }
+  let str = String(dateVal).trim();
+  if (!str || str.includes('NaN')) return toISO(new Date());
+
+  // Check if already YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+    return str;
+  }
+
+  // Remove Thai timezone parentheses like "(เวลาอินโดจีน)" or "(Indochina Time)"
+  let cleanStr = str.replace(/\s*\(.*?\)/g, '').trim();
+
+  // Try standard JS Date parse
+  let d = new Date(cleanStr);
+  if (!isNaN(d.getTime())) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
+  // Handle dd-mm-yyyy or dd/mm/yyyy (with BE year e.g. 2569 or AD year e.g. 2026)
+  const dmyMatch = cleanStr.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (dmyMatch) {
+    let day = parseInt(dmyMatch[1], 10);
+    let month = parseInt(dmyMatch[2], 10);
+    let year = parseInt(dmyMatch[3], 10);
+    if (year > 2400) year -= 543;
+    const mStr = String(month).padStart(2, '0');
+    const dStr = String(day).padStart(2, '0');
+    return `${year}-${mStr}-${dStr}`;
+  }
+
+  // Handle yyyy/mm/dd
+  const ymdMatch = cleanStr.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+  if (ymdMatch) {
+    let year = parseInt(ymdMatch[1], 10);
+    let month = parseInt(ymdMatch[2], 10);
+    let day = parseInt(ymdMatch[3], 10);
+    if (year > 2400) year -= 543;
+    const mStr = String(month).padStart(2, '0');
+    const dStr = String(day).padStart(2, '0');
+    return `${year}-${mStr}-${dStr}`;
+  }
+
+  return toISO(new Date());
+}
+
 function toISO(date) {
   if (!date) return toISO(new Date());
-  let d = date instanceof Date ? date : new Date(date);
-  if (isNaN(d.getTime())) {
-    if (typeof date === 'string' && date.includes('-')) {
-      const parts = date.split('-');
-      if (parts.length === 3) {
-        d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
-      }
-    }
+  if (typeof date === 'string') {
+    return normalizeToISO(date);
   }
+  let d = date instanceof Date ? date : new Date(date);
   if (isNaN(d.getTime())) d = new Date();
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -86,7 +137,8 @@ function fromISO(iso) {
   if (!iso || typeof iso !== 'string' || iso.includes('NaN')) {
     iso = toISO(new Date());
   }
-  const parts = iso.split('-');
+  const normalized = normalizeToISO(iso);
+  const parts = normalized.split('-');
   if (parts.length === 3) {
     const y = parseInt(parts[0], 10);
     const m = parseInt(parts[1], 10) - 1;
@@ -100,7 +152,8 @@ function fromISO(iso) {
 
 function formatThaiDate(iso, isLong = false) {
   if (!iso || typeof iso !== "string" || iso.includes("NaN")) return "-";
-  const parts = iso.split("-");
+  const normalized = normalizeToISO(iso);
+  const parts = normalized.split("-");
   if (parts.length !== 3) return iso;
   const y = parseInt(parts[0], 10);
   const m = parseInt(parts[1], 10) - 1;
@@ -109,8 +162,14 @@ function formatThaiDate(iso, isLong = false) {
   if (isNaN(y) || isNaN(m) || isNaN(d) || m < 0 || m > 11) return "-";
 
   const thaiYear = y < 2400 ? y + 543 : y;
-  const monthName = isLong ? THAI_MONTHS_FULL[m] : THAI_MONTHS_SHORT[m];
-  return `${d} ${monthName} ${thaiYear}`;
+  const dayStr = String(d).padStart(2, "0");
+  const monthStr = String(m + 1).padStart(2, "0");
+
+  if (isLong) {
+    const monthName = THAI_MONTHS_FULL[m];
+    return `${d} ${monthName} ${thaiYear}`;
+  }
+  return `${dayStr}-${monthStr}-${thaiYear}`;
 }
 
 function addDays(date, n) {
@@ -537,12 +596,17 @@ function saveUsers(users) {
 
 function getRequests() {
   const reqs = JSON.parse(localStorage.getItem('eredt_requests') || '[]');
-  // Sanitize existing cases if any contain invalid date strings
   let modified = false;
   reqs.forEach(r => {
     if (!r.startDate || r.startDate.includes('NaN')) {
       r.startDate = toISO(new Date());
       modified = true;
+    } else {
+      const norm = normalizeToISO(r.startDate);
+      if (norm !== r.startDate) {
+        r.startDate = norm;
+        modified = true;
+      }
     }
   });
   if (modified) saveRequests(reqs);
@@ -550,17 +614,34 @@ function getRequests() {
 }
 
 function saveRequests(requests) {
-  localStorage.setItem('eredt_requests', JSON.stringify(requests));
-  syncToGoogleSheet('saveRequests', { requests });
+  const cleanReqs = (requests || []).map(r => {
+    if (r.startDate) {
+      r.startDate = normalizeToISO(r.startDate);
+    }
+    return r;
+  });
+  localStorage.setItem('eredt_requests', JSON.stringify(cleanReqs));
+  syncToGoogleSheet('saveRequests', { requests: cleanReqs });
 }
 
 function getHolidays() {
-  return JSON.parse(localStorage.getItem('eredt_holidays') || JSON.stringify(DEFAULT_HOLIDAYS));
+  const raw = JSON.parse(localStorage.getItem('eredt_holidays') || JSON.stringify(DEFAULT_HOLIDAYS));
+  if (Array.isArray(raw)) {
+    return raw.map(h => ({
+      date: normalizeToISO(h.date),
+      name: String(h.name || '').trim()
+    })).filter(h => h.date && h.name);
+  }
+  return DEFAULT_HOLIDAYS.map(h => ({ date: normalizeToISO(h.date), name: h.name }));
 }
 
 function saveHolidays(holidays) {
-  localStorage.setItem('eredt_holidays', JSON.stringify(holidays));
-  syncToGoogleSheet('saveHolidays', { holidays });
+  const cleanHolidays = (holidays || []).map(h => ({
+    date: normalizeToISO(h.date),
+    name: String(h.name || '').trim()
+  })).filter(h => h.date && h.name);
+  localStorage.setItem('eredt_holidays', JSON.stringify(cleanHolidays));
+  syncToGoogleSheet('saveHolidays', { holidays: cleanHolidays });
 }
 
 // Global Application State
@@ -2732,8 +2813,12 @@ function parseHolidaysCSV(csvText) {
   const holidays = [];
   for (let i = 1; i < rows.length; i++) {
     const r = rows[i];
-    if (r[0] && r[0].includes('-')) {
-      holidays.push({ date: String(r[0]).trim(), name: String(r[1] || '').trim() });
+    if (r[0] && String(r[0]).trim()) {
+      const isoDate = normalizeToISO(r[0]);
+      const name = String(r[1] || '').trim();
+      if (isoDate && name) {
+        holidays.push({ date: isoDate, name: name });
+      }
     }
   }
   return holidays;
@@ -2835,7 +2920,11 @@ async function fetchLiveGoogleSheetData(options = {}) {
     updateProgress(95, 'กำลังอัพเดทระบบ...');
 
     if (Array.isArray(requestsData)) {
-      localStorage.setItem('eredt_requests', JSON.stringify(requestsData));
+      const cleanReqs = requestsData.map(r => {
+        if (r.startDate) r.startDate = normalizeToISO(r.startDate);
+        return r;
+      });
+      saveRequests(cleanReqs);
     }
 
     if (Array.isArray(usersData) && usersData.length > 0) {
@@ -2843,7 +2932,11 @@ async function fetchLiveGoogleSheetData(options = {}) {
     }
 
     if (Array.isArray(holidaysData) && holidaysData.length > 0) {
-      localStorage.setItem('eredt_holidays', JSON.stringify(holidaysData));
+      const cleanHolidays = holidaysData.map(h => ({
+        date: normalizeToISO(h.date),
+        name: String(h.name || '').trim()
+      })).filter(h => h.date && h.name);
+      saveHolidays(cleanHolidays);
     }
 
     updateProgress(100, 'ดึงข้อมูลสำเร็จ!');
