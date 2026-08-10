@@ -77,8 +77,8 @@
             </a>
           </li>
 
-          <!-- ADMIN MENUS -->
-          <li id="navCategoryAdmin" class="sidebar-menu-category" style="display: none;">ผู้ดูแลระบบ</li>
+          <!-- SPEC ข้อ 3: เจ้าหน้าที่ศาลทุกบัญชีเห็นเมนูจัดการเท่ากัน -->
+          <li id="navCategoryAdmin" class="sidebar-menu-category" style="display: none;">การจัดการระบบ</li>
           <li id="navItemUsers" style="display: none;">
             <a id="navItemUsersLink" href="javascript:void(0)" onclick="switchView('admin', event)" class="sidebar-item">
               <i class="fa-solid fa-users-gear"></i> <span>จัดการผู้ใช้งาน (Users)</span>
@@ -407,24 +407,55 @@
       <div class="login-header">
         <img src="img/logo.png" alt="e-REDT Logo">
         <h1>ระบบ e-REDT Online</h1>
-        <p>ระบบติดตามกำหนดเวลาผัดฟ้องฝากขัง (ฝั่งศาลและผู้ดูแลระบบ)</p>
+        <p>ระบบติดตามกำหนดเวลาผัดฟ้องฝากขัง (ฝั่งเจ้าหน้าที่ศาล)</p>
       </div>
 
-      <form onsubmit="handleLogin(event)">
-        <div class="form-group">
-          <label for="usernameInput"><i class="fa-solid fa-user"></i> ชื่อผู้ใช้งาน (Username)</label>
-          <input type="text" id="usernameInput" class="form-control" placeholder="เช่น officer1 หรือ admin" required>
+      <!-- SPEC ข้อ 3: ฟอร์มตั้งค่าบัญชีแรกของระบบ (แสดงเฉพาะตอนยังไม่มีบัญชีศาลเลย) -->
+      <div id="firstAccountSetupPanel" style="display: none;">
+        <div style="background: #eff6ff; padding: 1rem; border-radius: 0.75rem; margin-bottom: 1rem; border: 1px solid #bfdbfe; font-size: 0.85rem; color: #1e40af;">
+          <i class="fa-solid fa-circle-info"></i> <b>ตั้งค่าบัญชีแรกของระบบ</b><br>
+          ยังไม่มีบัญชีเจ้าหน้าที่ศาลในระบบ กรุณาสร้างบัญชีแรกเพื่อเริ่มใช้งาน
         </div>
+        <form onsubmit="handleCreateFirstCourtAccount(event)">
+          <div class="form-group">
+            <label for="firstCourtName"><i class="fa-solid fa-id-card"></i> ชื่อ - นามสกุล</label>
+            <input type="text" id="firstCourtName" class="form-control" placeholder="เช่น นายสมชาย ใจดี" required>
+          </div>
+          <div class="form-group">
+            <label for="firstCourtUsername"><i class="fa-solid fa-user"></i> ชื่อผู้ใช้งาน (Username)</label>
+            <input type="text" id="firstCourtUsername" class="form-control" placeholder="เช่น officer1" required>
+          </div>
+          <div class="form-group">
+            <label for="firstCourtPassword"><i class="fa-solid fa-key"></i> รหัสผ่าน</label>
+            <input type="password" id="firstCourtPassword" class="form-control" placeholder="ตั้งรหัสผ่าน" required>
+          </div>
+          <button type="submit" class="btn-primary" style="margin-top: 1rem;">
+            <i class="fa-solid fa-user-plus"></i> สร้างบัญชีแรกและเข้าสู่ระบบ
+          </button>
+          <div style="margin-top: 0.75rem; padding: 0.75rem; background: #fef3c7; border: 1px solid #fcd34d; border-radius: 0.5rem; font-size: 0.8rem; color: #92400e;">
+            <i class="fa-solid fa-triangle-exclamation"></i> <b>คำแนะนำ:</b> หลังจากสร้างบัญชีแรกแล้ว ควรสร้างบัญชีสำรองอย่างน้อย 2 บัญชีทันที เพื่อป้องกันกรณีลืมรหัสผ่าน
+          </div>
+        </form>
+      </div>
 
-        <div class="form-group">
-          <label for="passwordInput"><i class="fa-solid fa-lock"></i> รหัสผ่าน (Password)</label>
-          <input type="password" id="passwordInput" class="form-control" placeholder="ป้อนรหัสผ่าน" required>
-        </div>
+      <!-- ฟอร์ม Login ปกติ (แสดงเมื่อมีบัญชีศาลแล้ว) -->
+      <div id="normalLoginPanel">
+        <form onsubmit="handleLogin(event)">
+          <div class="form-group">
+            <label for="usernameInput"><i class="fa-solid fa-user"></i> ชื่อผู้ใช้งาน (Username)</label>
+            <input type="text" id="usernameInput" class="form-control" placeholder="ป้อนชื่อผู้ใช้งาน" required>
+          </div>
 
-        <button type="submit" class="btn-primary" style="margin-top: 1rem;">
-          <i class="fa-solid fa-right-to-bracket"></i> เข้าสู่ระบบ (Court & Admin Portal)
-        </button>
-      </form>
+          <div class="form-group">
+            <label for="passwordInput"><i class="fa-solid fa-lock"></i> รหัสผ่าน (Password)</label>
+            <input type="password" id="passwordInput" class="form-control" placeholder="ป้อนรหัสผ่าน" required>
+          </div>
+
+          <button type="submit" class="btn-primary" style="margin-top: 1rem;">
+            <i class="fa-solid fa-right-to-bracket"></i> เข้าสู่ระบบเจ้าหน้าที่ศาล
+          </button>
+        </form>
+      </div>
     </div>
   </div>
 
@@ -528,16 +559,21 @@
   </div>
 
   <!-- MODAL: RECEIVE CASE CONFIRMATION -->
-  <div id="receiveCaseModal" class="modal-overlay">
+  <div id="receiveOccasionModal" class="modal-overlay">
     <div class="glass-panel modal-container" style="max-width: 480px;">
       <div class="modal-header">
         <h3 style="font-size: 1.15rem; font-weight: 700; color: #059669;"><i class="fa-solid fa-check-double"></i> ยืนยันการรับเรื่องคำร้องฝากขัง</h3>
-        <button onclick="closeModal('receiveCaseModal')" class="modal-close"><i class="fa-solid fa-xmark"></i></button>
+        <button onclick="closeModal('receiveOccasionModal')" class="modal-close"><i class="fa-solid fa-xmark"></i></button>
       </div>
 
-      <form onsubmit="handleConfirmReceiveCase(event)">
+      <form onsubmit="handleConfirmReceiveOccasion(event)">
         <input type="hidden" id="receiveCaseNumber">
-        <p style="font-size: 0.875rem; color: var(--text-muted); margin-bottom: 1rem;">เมื่อศาลยืนยันรับเรื่อง ระบบจะปรับคำนวณวันครบกำหนดฝากขังครั้งถัดไปให้อัตโนมัติ</p>
+        <div style="background: #ecfdf5; border: 1px solid #a7f3d0; padding: 0.75rem; border-radius: 0.5rem; margin-bottom: 1rem;">
+          <div id="receiveCaseNumberDisplay" style="font-weight: 700; color: #047857; font-size: 1.05rem;">เลขคดี: -</div>
+          <div id="receiveCaseInfoDisplay" style="font-size: 0.85rem; color: #065f46; margin-top: 0.2rem;">ครั้งที่ - | สภ.: -</div>
+        </div>
+
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">เมื่อศาลยืนยันรับเรื่อง ระบบจะปรับคำนวณวันครบกำหนดฝากขังครั้งถัดไปให้อัตโนมัติ</p>
 
         <div class="form-group">
           <label for="receiveCapSelect"><i class="fa-solid fa-chart-line"></i> กำหนดเพดานฝากขังคดีอาญาเรื่องนี้</label>
@@ -547,8 +583,13 @@
           </select>
         </div>
 
+        <div class="form-group">
+          <label for="receiveActualDaysInput"><i class="fa-solid fa-clock"></i> จำนวนวันที่ศาลอนุญาตให้ฝากขังครั้งนี้ (วัน)</label>
+          <input type="number" id="receiveActualDaysInput" class="form-control" value="12" min="1" max="12" required>
+        </div>
+
         <div style="display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.25rem;">
-          <button type="button" onclick="closeModal('receiveCaseModal')" class="btn-secondary">ยกเลิก</button>
+          <button type="button" onclick="closeModal('receiveOccasionModal')" class="btn-secondary">ยกเลิก</button>
           <button type="submit" class="btn-primary" style="width: auto; background-color: #059669; border-color: #059669;">
             <i class="fa-solid fa-check-double"></i> ยืนยันรับเรื่อง
           </button>
@@ -593,11 +634,16 @@
       </div>
 
       <form onsubmit="handleSaveUser(event)">
-        <input type="hidden" id="userIsEdit">
+        <input type="hidden" id="editUsernameOriginal">
 
         <div class="form-group">
           <label for="modalUsernameInput"><i class="fa-solid fa-user"></i> ชื่อผู้ใช้งาน (Username)</label>
-          <input type="text" id="modalUsernameInput" class="form-control" placeholder="เช่น officer1" required>
+          <div style="display: flex; gap: 0.5rem;">
+            <input type="text" id="modalUsernameInput" class="form-control" placeholder="เช่น officer1" required>
+            <button type="button" id="btnGenPoliceUsername" onclick="generateAndSetPoliceUsername()" class="btn-secondary" style="display: none; font-size: 0.75rem; padding: 0.25rem 0.5rem; white-space: nowrap;">
+              <i class="fa-solid fa-wand-magic-sparkles"></i> สุ่ม Username
+            </button>
+          </div>
         </div>
 
         <div class="form-group">
@@ -607,22 +653,21 @@
 
         <div class="form-group">
           <label for="modalPasswordInput"><i class="fa-solid fa-key"></i> รหัสผ่าน (Password)</label>
-          <input type="password" id="modalPasswordInput" class="form-control" placeholder="ป้อนรหัสผ่าน" required>
+          <input type="password" id="modalPasswordInput" class="form-control" placeholder="ป้อนรหัสผ่าน">
         </div>
 
         <div class="form-row">
           <div class="form-group">
             <label for="modalRoleSelect"><i class="fa-solid fa-user-tag"></i> สิทธิบทบาท (Role)</label>
-            <select id="modalRoleSelect" class="form-control" required>
+            <select id="modalRoleSelect" class="form-control" onchange="toggleStationSelect(this.value)" required>
               <option value="officer">เจ้าหน้าที่ศาล</option>
               <option value="police">ตำรวจ (พนักงานสอบสวน)</option>
-              <option value="admin">ผู้ดูแลระบบ (Admin)</option>
             </select>
           </div>
 
-          <div class="form-group">
-            <label for="modalStationSelect"><i class="fa-solid fa-building-shield"></i> สังกัดสถานีตำรวจ</label>
-            <select id="modalStationSelect" class="form-control">
+          <div id="modalStationGroup" class="form-group" style="display: none;">
+            <label for="modalStationSelectInput"><i class="fa-solid fa-building-shield"></i> สังกัดสถานีตำรวจ</label>
+            <select id="modalStationSelectInput" class="form-control">
               <option value="">-- ไม่ระบุ / เจ้าหน้าที่ศาล --</option>
             </select>
           </div>
