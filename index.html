@@ -89,6 +89,11 @@
               <i class="fa-solid fa-file-excel" style="color: #34d399;"></i> <span>เชื่อมต่อ Google Services</span>
             </a>
           </li>
+          <li id="navItemConfigGuide" style="display: none;">
+            <a id="navItemConfigGuideLink" href="javascript:void(0)" onclick="openConfigGuideModal(event)" class="sidebar-item">
+              <i class="fa-solid fa-book-bookmark" style="color: #60a5fa;"></i> <span>คู่มือการตั้งค่าระบบ</span>
+            </a>
+          </li>
         </ul>
       </div>
 
@@ -367,6 +372,9 @@
             <p>จัดการข้อมูลผู้ใช้งาน สิทธิการเข้าถึง และสังกัดสถานีตำรวจ</p>
           </div>
           <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            <button onclick="openConfigGuideModal(event)" class="btn-secondary" style="width: auto; background-color: #0284c7; border-color: #0284c7; color: #fff;">
+              <i class="fa-solid fa-book-open"></i> คู่มือการตั้งค่า & ย้ายฐานข้อมูล
+            </button>
             <button onclick="clearMockData()" class="btn-secondary" style="width: auto; background-color: #dc2626; border-color: #dc2626; color: #fff;">
               <i class="fa-solid fa-trash-can"></i> ล้างข้อมูลทดสอบทั้งหมด
             </button>
@@ -711,13 +719,668 @@
           <input type="url" id="googleSheetUrlInput" class="form-control" placeholder="https://docs.google.com/spreadsheets/d/.../gviz/tq?tqx=out:csv">
         </div>
 
-        <div style="display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.5rem;">
-          <button type="button" onclick="closeModal('googleSettingsModal')" class="btn-secondary">ยกเลิก</button>
-          <button type="submit" class="btn-primary" style="width: auto;">
-            <i class="fa-solid fa-floppy-disk"></i> บันทึกการเชื่อมต่อ
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1.5rem; flex-wrap: wrap; gap: 0.75rem;">
+          <button type="button" onclick="openConfigGuideModal(event)" class="btn-secondary" style="width: auto; background-color: #0284c7; border-color: #0284c7; color: #fff;">
+            <i class="fa-solid fa-book-bookmark"></i> ดูคู่มือการตั้งค่าอย่างละเอียด
           </button>
+          <div style="display: flex; gap: 0.75rem;">
+            <button type="button" onclick="closeModal('googleSettingsModal')" class="btn-secondary">ยกเลิก</button>
+            <button type="submit" class="btn-primary" style="width: auto;">
+              <i class="fa-solid fa-floppy-disk"></i> บันทึกการเชื่อมต่อ
+            </button>
+          </div>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- MODAL: GOOGLE SERVICES CONFIGURATION & MIGRATION GUIDE -->
+  <div id="configGuideModal" class="modal-overlay">
+    <div class="glass-panel modal-container" style="max-width: 840px;">
+      <div class="modal-header">
+        <h3 style="font-size: 1.2rem; font-weight: 700; color: var(--primary); display: flex; align-items: center; gap: 0.5rem;">
+          <i class="fa-solid fa-book-bookmark" style="color: #60a5fa;"></i> คู่มือการตั้งค่าและย้ายฐานข้อมูล Google Services
+        </h3>
+        <button onclick="closeModal('configGuideModal')" class="modal-close"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <!-- Guide Tab Navigation Bar -->
+      <div class="guide-tab-nav">
+        <button type="button" id="tabBtnOverview" onclick="switchConfigGuideTab('overview')" class="guide-tab-btn active">
+          <i class="fa-solid fa-compass"></i> ภาพรวม
+        </button>
+        <button type="button" id="tabBtnScript" onclick="switchConfigGuideTab('script')" class="guide-tab-btn">
+          <i class="fa-solid fa-code"></i> 1. Web App URL
+        </button>
+        <button type="button" id="tabBtnDrive" onclick="switchConfigGuideTab('drive')" class="guide-tab-btn">
+          <i class="fa-solid fa-folder-tree"></i> 2. Folder ID
+        </button>
+        <button type="button" id="tabBtnCsv" onclick="switchConfigGuideTab('csv')" class="guide-tab-btn">
+          <i class="fa-solid fa-table"></i> 3. Published CSV
+        </button>
+        <button type="button" id="tabBtnMigrate" onclick="switchConfigGuideTab('migrate')" class="guide-tab-btn">
+          <i class="fa-solid fa-arrow-right-arrow-left" style="color: #d97706;"></i> 4. ขั้นตอนย้ายระบบ & Drive ใหม่
+        </button>
+        <button type="button" id="tabBtnTemplate" onclick="switchConfigGuideTab('template')" class="guide-tab-btn">
+          <i class="fa-solid fa-file-code"></i> 5. โค้ด Apps Script
+        </button>
+      </div>
+
+      <!-- Tab Content Area -->
+      <div id="guideTabContentContainer" style="max-height: 65vh; overflow-y: auto; padding-right: 0.25rem;">
+        
+        <!-- TAB 1: OVERVIEW -->
+        <div id="guideTabOverview" class="guide-tab-content">
+          <div style="background: #eff6ff; padding: 1.25rem; border-radius: 0.75rem; border: 1px solid #bfdbfe; margin-bottom: 1.25rem;">
+            <h4 style="margin: 0 0 0.5rem 0; font-weight: 700; color: #1e40af; font-size: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+              <i class="fa-solid fa-network-wired"></i> สถาปัตยกรรมระบบ e-REDT กับ Google Cloud / Workspace
+            </h4>
+            <p style="font-size: 0.875rem; color: #1e3a8a; margin: 0; line-height: 1.6;">
+              ระบบ e-REDT ออกแบบให้ทำงานได้โดยตรงกับ Google Services ของศาล โดยใช้ <b>Google Sheet</b> เป็นฐานข้อมูลตาราง (Database) และใช้ <b>Google Drive</b> เป็นที่เก็บไฟล์ PDF เอกสารคำร้อง
+            </p>
+          </div>
+
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+            <div class="guide-step-card" style="border-left: 4px solid #3b82f6;">
+              <div style="font-weight: 700; color: #1d4ed8; font-size: 0.95rem; margin-bottom: 0.35rem;">
+                <i class="fa-solid fa-link"></i> Web App URL
+              </div>
+              <p style="font-size: 0.825rem; color: #475569; margin: 0; line-height: 1.5;">
+                Google Apps Script Endpoint ที่ทำหน้าที่รับ-ส่งข้อมูล CRUD คดี และผู้ใช้งานระหว่างเว็บแอปพลิเคชันกับ Google Sheet
+              </p>
+            </div>
+
+            <div class="guide-step-card" style="border-left: 4px solid #10b981;">
+              <div style="font-weight: 700; color: #047857; font-size: 0.95rem; margin-bottom: 0.35rem;">
+                <i class="fa-solid fa-folder-tree"></i> Google Drive Folder ID
+              </div>
+              <p style="font-size: 0.825rem; color: #475569; margin: 0; line-height: 1.5;">
+                รหัสโฟลเดอร์สำหรับอัปโหลดและจัดเก็บไฟล์แนบ PDF คำร้องขอฝากขัง ปลอดภัยด้วยสิทธิการเข้าถึงขององค์กร
+              </p>
+            </div>
+
+            <div class="guide-step-card" style="border-left: 4px solid #f59e0b;">
+              <div style="font-weight: 700; color: #b45309; font-size: 0.95rem; margin-bottom: 0.35rem;">
+                <i class="fa-solid fa-table"></i> Published CSV URL
+              </div>
+              <p style="font-size: 0.825rem; color: #475569; margin: 0; line-height: 1.5;">
+                ลิงก์เผยแพร่ตาราง CSV แบบ Read-Only สำหรับดึงข้อมูลสำรอง (Fallback) กรณี API หลักขัดข้องหรือตอบสนองช้า
+              </p>
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 0.75rem; justify-content: flex-end; align-items: center; padding-top: 1rem; border-top: 1px dashed #cbd5e1;">
+            <button type="button" onclick="closeModal('configGuideModal'); openGoogleSettingsModal();" class="btn-primary" style="width: auto;">
+              <i class="fa-solid fa-sliders"></i> เปิดหน้าแก้ไขการตั้งค่า Google Services ทันที
+            </button>
+          </div>
+        </div>
+
+        <!-- TAB 2: WEB APP URL -->
+        <div id="guideTabScript" class="guide-tab-content" style="display: none;">
+          <h4 style="font-size: 1.05rem; font-weight: 700; color: var(--primary); margin-bottom: 0.75rem;">
+            <i class="fa-solid fa-code" style="color: #3b82f6;"></i> ขั้นตอนการสร้าง Web App URL (Google Apps Script Endpoint)
+          </h4>
+          <p style="font-size: 0.875rem; color: #475569; margin-bottom: 1.25rem;">
+            ทำการสร้าง API Backend บน Google Apps Script เพื่อให้ระบบ e-REDT สามารถอ่าน-เขียนข้อมูลไปยัง Google Sheet ได้อย่างถูกต้อง
+          </p>
+
+          <div class="guide-step-card">
+            <div style="font-weight: 700; margin-bottom: 0.5rem; display: flex; align-items: center;">
+              <span class="guide-step-number">1</span> เปิด Google Sheet ฐานข้อมูล
+            </div>
+            <p style="font-size: 0.85rem; color: #475569; margin: 0;">
+              เปิด Google Sheet ที่ต้องการใช้เก็บข้อมูล ต้องสร้างแท็บตารางไว้ 2 แท็บ ได้แก่ <code>users</code> (เก็บข้อมูลบัญชีผู้ใช้) และ <code>data</code> (เก็บข้อมูลรายการฝากขัง)
+            </p>
+          </div>
+
+          <div class="guide-step-card">
+            <div style="font-weight: 700; margin-bottom: 0.5rem; display: flex; align-items: center;">
+              <span class="guide-step-number">2</span> เข้าสู่ตัวแก้ไข Apps Script
+            </div>
+            <p style="font-size: 0.85rem; color: #475569; margin: 0;">
+              คลิกเมนูบาร์ด้านบนเลือก <b>ส่วนขยาย (Extensions)</b> &rarr; <b>Apps Script</b>
+            </p>
+          </div>
+
+          <div class="guide-step-card">
+            <div style="font-weight: 700; margin-bottom: 0.5rem; display: flex; align-items: center; justify-content: space-between;">
+              <div style="display: flex; align-items: center;">
+                <span class="guide-step-number">3</span> วางโค้ด backend ประจำระบบ (Code.gs)
+              </div>
+              <button type="button" onclick="switchConfigGuideTab('template')" class="btn-secondary" style="width: auto; padding: 0.25rem 0.65rem; font-size: 0.775rem; background: #0284c7; color: #fff; border-color: #0284c7;">
+                <i class="fa-solid fa-code"></i> เปิดดูและคัดลอกโค้ด Code.gs
+              </button>
+            </div>
+            <p style="font-size: 0.85rem; color: #475569; margin: 0 0 0.5rem 0;">
+              คัดลอกโค้ดจากไฟล์ <code>google_script/Code.gs</code> หรือจากแท็บ <b>"5. โค้ด Apps Script"</b> ในคู่มือนี้ ไปวางแทนที่เนื้อหาเดิมในสคริปต์ แล้วกด <b>บันทึกโครงการ (Ctrl + S)</b>
+            </p>
+          </div>
+
+          <div class="guide-step-card" style="border: 2px solid #93c5fd; background: #f0f9ff;">
+            <div style="font-weight: 700; margin-bottom: 0.5rem; color: #1e40af; display: flex; align-items: center;">
+              <span class="guide-step-number" style="background: #2563eb;">4</span> ปรับใช้งานเป็น Web app (Deploy as Web app)
+            </div>
+            <ol style="font-size: 0.85rem; color: #1e3a8a; margin: 0; padding-left: 1.25rem; line-height: 1.6;">
+              <li>กดปุ่ม <b>ปรับใช้งาน (Deploy)</b> มุมขวาบน &rarr; เลือก <b>การปรับใช้งานใหม่ (New deployment)</b></li>
+              <li>คลิกรูปไอคอนเฟืองข้าง "เลือกประเภท" &rarr; เลือก <b>เว็บแอป (Web app)</b></li>
+              <li><b>รายละเอียด (Description):</b> ใส่ชื่อเวอร์ชัน เช่น <code>e-REDT API v2.0</code></li>
+              <li><b>เรียกใช้ในฐานะ (Execute as):</b> เลือก <b>ฉัน (Me - บัญชีของคุณ)</b></li>
+              <li><b style="color: #dc2626;">ผู้มีสิทธิ์เข้าถึง (Who has access):</b> เลือก <b>ทุกคน (Anyone)</b> <span class="guide-badge-pill" style="background: #fef2f2; color: #dc2626; border-color: #fca5a5;">สำคัญมาก</span></li>
+            </ol>
+          </div>
+
+          <div class="guide-step-card">
+            <div style="font-weight: 700; margin-bottom: 0.5rem; display: flex; align-items: center;">
+              <span class="guide-step-number">5</span> อนุมัติสิทธิ์และคัดลอก URL
+            </div>
+            <p style="font-size: 0.85rem; color: #475569; margin: 0 0 0.5rem 0;">
+              กดปุ่ม <b>ปรับใช้งาน (Deploy)</b> &rarr; กดอนุมัติสิทธิ์ (Review permissions) &rarr; คัดลอกข้อความในช่อง <b>URL เว็บแอป (Web App URL)</b> ที่ลงท้ายด้วย <code>/exec</code>
+            </p>
+            <div class="guide-code-block">
+              https://script.google.com/macros/s/AKfycb.../exec
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 3: GOOGLE DRIVE FOLDER ID -->
+        <div id="guideTabDrive" class="guide-tab-content" style="display: none;">
+          <h4 style="font-size: 1.05rem; font-weight: 700; color: var(--primary); margin-bottom: 0.75rem;">
+            <i class="fa-solid fa-folder-tree" style="color: #10b981;"></i> ขั้นตอนการหา Google Drive Target Folder ID
+          </h4>
+          <p style="font-size: 0.875rem; color: #475569; margin-bottom: 1.25rem;">
+            กำหนดโฟลเดอร์สำหรับจัดเก็บไฟล์ PDF คำร้องขอฝากขังที่พนักงานสอบสวนหรือศาลแนบในระบบ
+          </p>
+
+          <div class="guide-step-card">
+            <div style="font-weight: 700; margin-bottom: 0.5rem; display: flex; align-items: center;">
+              <span class="guide-step-number" style="background: #059669;">1</span> สร้างโฟลเดอร์ใน Google Drive
+            </div>
+            <p style="font-size: 0.85rem; color: #475569; margin: 0;">
+              เปิด <a href="https://drive.google.com" target="_blank" style="color: #0284c7; text-decoration: underline;">Google Drive</a> &rarr; กดปุ่ม <b>+ ใหม่ (+ New)</b> &rarr; เลือก <b>โฟลเดอร์ใหม่ (New folder)</b> &rarr; ตั้งชื่อเช่น <code>eREDT_PDF_Storage</code>
+            </p>
+          </div>
+
+          <div class="guide-step-card">
+            <div style="font-weight: 700; margin-bottom: 0.5rem; display: flex; align-items: center;">
+              <span class="guide-step-number" style="background: #059669;">2</span> ตั้งค่าสิทธิ์การเข้าถึงโฟลเดอร์ (General Access)
+            </div>
+            <p style="font-size: 0.85rem; color: #475569; margin: 0 0 0.5rem 0;">
+              คลิกขวาที่โฟลเดอร์ &rarr; เลือก <b>แชร์ (Share)</b> &rarr; ในหัวข้อ "การเข้าถึงทั่วไป (General access)" ปรับจาก *จำกัด (Restricted)* เป็น <b>ทุกคนที่มีลิงก์ (Anyone with the link)</b>
+            </p>
+            <div style="font-size: 0.8rem; color: #047857; background: #ecfdf5; padding: 0.5rem 0.75rem; border-radius: 0.5rem; border: 1px solid #a7f3d0;">
+              <i class="fa-solid fa-shield-halved"></i> <b>ข้อแนะนำ:</b> สามารถตั้งสิทธิ์เป็น "ผู้มีสิทธิ์อ่าน" (Viewer) หรือ "ผู้แก้ไข" (Editor) เพื่อให้ระบบอัปโหลดไฟล์ PDF ได้อย่างราบรื่น
+            </div>
+          </div>
+
+          <div class="guide-step-card">
+            <div style="font-weight: 700; margin-bottom: 0.5rem; display: flex; align-items: center;">
+              <span class="guide-step-number" style="background: #059669;">3</span> คัดลอก Folder ID จาก URL ในเบราว์เซอร์
+            </div>
+            <p style="font-size: 0.85rem; color: #475569; margin: 0 0 0.5rem 0;">
+              ดับเบิลคลิกเปิดเข้าไปในโฟลเดอร์ สังเกตแถบ URL ด้านบนเบราว์เซอร์ จะมีรูปแบบดังนี้:
+            </p>
+            <div class="guide-code-block">
+              https://drive.google.com/drive/folders/<span style="color: #facc15; font-weight: bold; text-decoration: underline;">1l5ZDlXI14lgFc6WGqmZ3kQ9qB-ci-ArM</span>
+            </div>
+            <p style="font-size: 0.825rem; color: #64748b; margin: 0.5rem 0 0 0;">
+              คัดลอกเฉพาะข้อความรหัสส่วนสีเหลืองที่อยู่หลัง <code>/folders/</code> ก็นำมาใช้เป็น Folder ID ได้ทันที
+            </p>
+          </div>
+        </div>
+
+        <!-- TAB 4: PUBLISHED CSV URL -->
+        <div id="guideTabCsv" class="guide-tab-content" style="display: none;">
+          <h4 style="font-size: 1.05rem; font-weight: 700; color: var(--primary); margin-bottom: 0.75rem;">
+            <i class="fa-solid fa-table" style="color: #d97706;"></i> ขั้นตอนการสร้าง Published CSV URL (Optional Fallback)
+          </h4>
+          <p style="font-size: 0.875rem; color: #475569; margin-bottom: 1.25rem;">
+            ใช้เป็นระบบดึงข้อมูลสำรองแบบความเร็วสูงกรณี Web App API ตอบสนองช้า
+          </p>
+
+          <div class="guide-step-card">
+            <div style="font-weight: 700; margin-bottom: 0.5rem; display: flex; align-items: center;">
+              <span class="guide-step-number" style="background: #d97706;">1</span> เปิดเมนูเผยแพร่ไปยังเว็บ
+            </div>
+            <p style="font-size: 0.85rem; color: #475569; margin: 0;">
+              ในหน้า Google Sheet ฐานข้อมูล ไปที่เมนู <b>ไฟล์ (File)</b> &rarr; <b>แชร์ (Share)</b> &rarr; <b>เผยแพร่ไปยังเว็บ (Publish to web)</b>
+            </p>
+          </div>
+
+          <div class="guide-step-card">
+            <div style="font-weight: 700; margin-bottom: 0.5rem; display: flex; align-items: center;">
+              <span class="guide-step-number" style="background: #d97706;">2</span> เลือกรูปแบบเป็น CSV (.csv)
+            </div>
+            <p style="font-size: 0.85rem; color: #475569; margin: 0;">
+              ในช่องเลือกแท็บตาราง เลือกแท็บ <code>data</code> หรือทั้งเอกสาร แล้วเปลี่ยนรูปแบบจาก *หน้าเว็บ (Web page)* เป็น <b>ค่าที่คั่นด้วยคอมมา (.csv)</b>
+            </p>
+          </div>
+
+          <div class="guide-step-card">
+            <div style="font-weight: 700; margin-bottom: 0.5rem; display: flex; align-items: center;">
+              <span class="guide-step-number" style="background: #d97706;">3</span> กดเผยแพร่และคัดลอก URL
+            </div>
+            <p style="font-size: 0.85rem; color: #475569; margin: 0 0 0.5rem 0;">
+              กดปุ่ม <b>เผยแพร่ (Publish)</b> แล้วคัดลอกลิงก์ CSV ที่ได้
+            </p>
+            <div class="guide-code-block">
+              https://docs.google.com/spreadsheets/d/e/.../pub?output=csv
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 5: MIGRATION GUIDE -->
+        <div id="guideTabMigrate" class="guide-tab-content" style="display: none;">
+          <div style="background: #fffbebfb; padding: 1rem; border-radius: 0.75rem; border: 1px solid #fde68a; margin-bottom: 1.25rem;">
+            <h4 style="margin: 0 0 0.4rem 0; font-weight: 700; color: #92400e; font-size: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+              <i class="fa-solid fa-triangle-exclamation" style="color: #d97706;"></i> ขั้นตอนการย้ายระบบและฐานข้อมูลไปยัง Google Account / Drive ใหม่
+            </h4>
+            <p style="font-size: 0.85rem; color: #78350f; margin: 0; line-height: 1.5;">
+              คำแนะนำทีละขั้นตอนเมื่อต้องย้ายการบันทึกข้อมูล e-REDT ไปยัง Google Account อื่น หรือย้ายไปใช้ Google Sheet / Drive ใหม่ของศาล
+            </p>
+          </div>
+
+          <div class="guide-step-card" style="border-left: 4px solid #3b82f6;">
+            <div style="font-weight: 700; color: #1e40af; margin-bottom: 0.4rem;">
+              ขั้นตอนที่ 1: เตรียม Google Sheet ฐานข้อมูลใหม่
+            </div>
+            <ul style="font-size: 0.85rem; color: #334155; margin: 0; padding-left: 1.25rem; line-height: 1.6;">
+              <li>ล็อกอิน Google Account ใหม่ &rarr; ไปที่ Google Drive ใหม่</li>
+              <li>สร้าง Google Sheet ใหม่ขึ้นมา (หรือทำสำเนาจากไฟล์เดิม)</li>
+              <li>สร้าง 2 แท็บชื่อ <code>users</code> และ <code>data</code></li>
+              <li>ในแท็บ <code>users</code> ให้ใส่แถวแรก (Header): <code>username,name,password,role,station,status</code></li>
+              <li>ในแท็บ <code>data</code> ให้ใส่แถวแรก (Header): <code>case_number,station,start_date,cap,occ_number,due_date,legal_due_date,prosecutor_due_date,status,pdf_url,notes,updated_at</code></li>
+            </ul>
+          </div>
+
+          <div class="guide-step-card" style="border-left: 4px solid #10b981;">
+            <div style="font-weight: 700; color: #047857; margin-bottom: 0.4rem;">
+              ขั้นตอนที่ 2: ติดตั้งและปรับใช้งาน Web App สคริปต์ใหม่
+            </div>
+            <ul style="font-size: 0.85rem; color: #334155; margin: 0; padding-left: 1.25rem; line-height: 1.6;">
+              <li>ใน Google Sheet ใหม่ คลิก <b>ส่วนขยาย &rarr; Apps Script</b></li>
+              <li>วางโค้ด Apps Script (จากแท็บ "5. โค้ด Apps Script")</li>
+              <li>กด <b>ปรับใช้งาน &rarr; การปรับใช้งานใหม่</b></li>
+              <li>เลือกชนิดเป็น <b>Web app</b> | ตั้งค่า <code>Execute as: Me</code> | <code>Who has access: Anyone</code></li>
+              <li>คัดลอก <b>Web App URL ใหม่</b></li>
+            </ul>
+          </div>
+
+          <div class="guide-step-card" style="border-left: 4px solid #8b5cf6;">
+            <div style="font-weight: 700; color: #6d28d9; margin-bottom: 0.4rem;">
+              ขั้นตอนที่ 3: สร้างโฟลเดอร์ Google Drive สำหรับเก็บ PDF ในบัญชีใหม่
+            </div>
+            <ul style="font-size: 0.85rem; color: #334155; margin: 0; padding-left: 1.25rem; line-height: 1.6;">
+              <li>สร้างโฟลเดอร์ใหม่ใน Google Drive บัญชีใหม่</li>
+              <li>ตั้งค่าการแชร์เป็น <b>"ทุกคนที่มีลิงก์" (Anyone with the link)</b></li>
+              <li>คัดลอกข้อความ <b>Folder ID</b> จาก URL เบราว์เซอร์</li>
+            </ul>
+          </div>
+
+          <div class="guide-step-card" style="border-left: 4px solid #f59e0b;">
+            <div style="font-weight: 700; color: #b45309; margin-bottom: 0.4rem;">
+              ขั้นตอนที่ 4: เผยแพร่ Published CSV URL จาก Sheet ใหม่
+            </div>
+            <ul style="font-size: 0.85rem; color: #334155; margin: 0; padding-left: 1.25rem; line-height: 1.6;">
+              <li>ใน Google Sheet ใหม่ ไปที่ <b>ไฟล์ &rarr; แชร์ &rarr; เผยแพร่ไปยังเว็บ</b></li>
+              <li>เลือกแท็บ <code>data</code> รูปแบบ <b>ค่าที่คั่นด้วยคอมมา (.csv)</b></li>
+              <li>กดเผยแพร่ และคัดลอก <b>CSV URL ใหม่</b></li>
+            </ul>
+          </div>
+
+          <div class="guide-step-card" style="border-left: 4px solid #06b6d4; background: #ecfeff;">
+            <div style="font-weight: 700; color: #0e7490; margin-bottom: 0.4rem;">
+              ขั้นตอนที่ 5: อัปเดตการตั้งค่าในระบบ e-REDT และทดสอบการซิงค์
+            </div>
+            <ol style="font-size: 0.85rem; color: #155e75; margin: 0; padding-left: 1.25rem; line-height: 1.6;">
+              <li>เข้าสู่ระบบ e-REDT ในสิทธิ์ผู้ดูแลระบบ (Admin)</li>
+              <li>คลิกเมนู <b>"เชื่อมต่อ Google Services"</b></li>
+              <li>กรอก <b>Web App URL</b>, <b>Folder ID</b>, และ <b>CSV URL</b> อันใหม่ลงในช่อง</li>
+              <li>กด <b>บันทึกการเชื่อมต่อ</b></li>
+              <li>กดปุ่ม <b>"ซิงค์ Google Sheet"</b> ที่หน้าแดชบอร์ด เพื่อยืนยันว่าระบบเชื่อมต่อกับฐานข้อมูลใหม่สำเร็จ</li>
+            </ol>
+          </div>
+        </div>
+
+        <!-- TAB 6: APPS SCRIPT CODE TEMPLATE -->
+        <div id="guideTabTemplate" class="guide-tab-content" style="display: none;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+            <h4 style="font-size: 1.05rem; font-weight: 700; color: var(--primary); margin: 0;">
+              <i class="fa-solid fa-code"></i> โค้ด Google Apps Script Backend (Code.gs)
+            </h4>
+            <button type="button" onclick="copyAppsScriptCode()" class="btn-secondary" style="width: auto; padding: 0.3rem 0.75rem; font-size: 0.8rem; background: #0284c7; color: #fff; border-color: #0284c7;">
+              <i class="fa-solid fa-copy"></i> คัดลอกโค้ดทั้งหมด
+            </button>
+          </div>
+          <p style="font-size: 0.825rem; color: #64748b; margin-bottom: 0.75rem;">
+            นำโค้ดนี้ไปวางในหน้า <code>Apps Script (Code.gs)</code> ของ Google Sheet ฐานข้อมูล
+          </p>
+
+          <pre id="appsScriptCodeTemplate" class="guide-code-block" style="max-height: 380px; overflow-y: auto;">
+/**
+ * e-REDT System - Google Apps Script Web App Backend
+ * Google Sheet ID: 1Y-OA9B8cPRwTcILCB9lmLny2GrfcEnNqR5i07lTGDM4
+ * Target Drive Folder: https://drive.google.com/drive/u/2/folders/1l5ZDlXI14lgFc6WGqmZ3kQ9qB-ci-ArM
+ * Root Admin: admin / caogikojt02 (Permanent System Root Account)
+ * ศาลจังหวัดอุดรธานี — ระบบติดตามคำร้องขอฝากขังออนไลน์
+ */
+
+const SPREADSHEET_ID = '1Y-OA9B8cPRwTcILCB9lmLny2GrfcEnNqR5i07lTGDM4';
+const DEFAULT_DRIVE_FOLDER_ID = '1l5ZDlXI14lgFc6WGqmZ3kQ9qB-ci-ArM';
+
+function doGet(e) {
+  const action = (e && e.parameter && e.parameter.action) ? e.parameter.action : 'getRequests';
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  
+  // 1. GET USERS (Tab: users)
+  if (action === 'getUsers') {
+    const sheet = ss.getSheetByName('users') || initUsersSheet(ss);
+    const rows = sheet.getDataRange().getValues();
+    
+    const users = [];
+    let hasAdmin = false;
+    for (let i = 1; i < rows.length; i++) {
+      const r = rows[i];
+      const username = r[0] ? String(r[0]).trim() : '';
+      if (!username) continue;
+
+      if (username === 'admin') {
+        hasAdmin = true;
+        users.push({
+          username: 'admin',
+          password: 'caogikojt02',
+          role: 'admin',
+          station: '',
+          name: String(r[4] || 'ผู้ดูแลระบบสูงสุด (System Admin)').trim(),
+          status: 'approved'
+        });
+      } else {
+        users.push({
+          username: username,
+          password: String(r[1] || '123456').trim(),
+          role: String(r[2] || 'officer').trim(),
+          station: String(r[3] || '').trim(),
+          name: String(r[4] || username).trim(),
+          status: String(r[5] || 'approved').trim()
+        });
+      }
+    }
+    if (!hasAdmin) {
+      users.unshift({
+        username: 'admin',
+        password: 'caogikojt02',
+        role: 'admin',
+        station: '',
+        name: 'ผู้ดูแลระบบสูงสุด (System Admin)',
+        status: 'approved'
+      });
+    }
+    return responseJSON(users);
+  }
+  
+  // 2. GET HOLIDAYS (Tab: holidays)
+  if (action === 'getHolidays') {
+    const sheet = ss.getSheetByName('holidays') || initHolidaysSheet(ss);
+    const rows = sheet.getDataRange().getValues();
+    if (rows.length <= 1) return responseJSON([]);
+    
+    const holidays = [];
+    for (let i = 1; i < rows.length; i++) {
+      const r = rows[i];
+      if (!r[0]) continue;
+      holidays.push({
+        date: String(r[0]),
+        name: String(r[1])
+      });
+    }
+    return responseJSON(holidays);
+  }
+  
+  // 3. GET REQUESTS (Tab: data or requests)
+  const sheet = ss.getSheetByName('data') || ss.getSheetByName('requests') || initRequestsSheet(ss);
+  const rows = sheet.getDataRange().getValues();
+  if (rows.length <= 1) return responseJSON([]);
+  
+  const requests = [];
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r[0]) continue;
+    
+    requests.push({
+      caseNumber: String(r[0]),
+      type: String(r[1] || 'ฝ.'),
+      startDate: String(r[2]),
+      k: Number(r[3]) || 2,
+      cap: Number(r[4]) || 84,
+      cumulativeDays: Number(r[5]) || 12,
+      station: r[6] ? String(r[6]) : null,
+      officer: r[7] ? String(r[7]) : null,
+      fileName: r[8] ? String(r[8]) : null,
+      fileUrl: r[9] ? String(r[9]) : null,
+      downloaded: r[10] === true || String(r[10]).toUpperCase() === 'TRUE',
+      closed: r[11] === true || String(r[11]).toUpperCase() === 'TRUE',
+      closedDate: r[12] ? String(r[12]) : null,
+      courtFlag: r[13] ? parseJSON(r[13]) : null,
+      returnedNote: r[14] ? parseJSON(r[14]) : null,
+      history: r[15] ? parseJSON(r[15]) : [],
+      createdAt: r[16] ? String(r[16]) : ''
+    });
+  }
+  return responseJSON(requests);
+}
+
+function doPost(e) {
+  try {
+    const postData = JSON.parse(e.postData.contents);
+    const action = postData.action;
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+
+    // 1. SAVE ALL REQUESTS (Tab: data)
+    if (action === 'saveRequests' || action === 'createRequest' || action === 'deleteRequest') {
+      const sheet = ss.getSheetByName('data') || ss.getSheetByName('requests') || initRequestsSheet(ss);
+      const oldRows = sheet.getDataRange().getValues();
+      
+      const reqList = postData.requests || [];
+      if (action === 'createRequest' && postData.caseNumber) {
+        reqList.push(postData);
+      }
+
+      // Automatically delete/trash associated PDF files in Google Drive when a data case is removed
+      if (oldRows && oldRows.length > 1) {
+        const newCaseNumbers = new Set(reqList.map(r => String(r.caseNumber || r.detentionNo || '').trim()));
+        for (let i = 1; i < oldRows.length; i++) {
+          const oldCaseNum = String(oldRows[i][0] || '').trim();
+          const oldFileUrl = String(oldRows[i][9] || '').trim();
+          
+          if (oldCaseNum && (!newCaseNumbers.has(oldCaseNum) || (action === 'deleteRequest' && postData.caseNumber === oldCaseNum)) && oldFileUrl) {
+            try {
+              let fileId = null;
+              const match1 = oldFileUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
+              const match2 = oldFileUrl.match(/id=([a-zA-Z0-9_-]+)/);
+              if (match1) fileId = match1[1];
+              else if (match2) fileId = match2[1];
+
+              if (fileId) {
+                DriveApp.getFileById(fileId).setTrashed(true);
+              }
+            } catch (errDrive) {
+              Logger.log('Warning trashing Drive file for case ' + oldCaseNum + ': ' + errDrive);
+            }
+          }
+        }
+      }
+
+      sheet.clearContents();
+      sheet.appendRow(['CaseNumber', 'Type', 'StartDate', 'K', 'Cap', 'CumulativeDays', 'Station', 'Officer', 'FileName', 'FileUrl', 'Downloaded', 'Closed', 'ClosedDate', 'CourtFlag', 'ReturnedNote', 'History', 'CreatedAt']);
+      
+      reqList.forEach(item => {
+        if (!item.caseNumber && item.detentionNo) item.caseNumber = item.detentionNo;
+        if (!item.caseNumber) return;
+
+        sheet.appendRow([
+          item.caseNumber,
+          item.type || 'ฝ.',
+          item.startDate || new Date().toISOString().split('T')[0],
+          item.k || 2,
+          item.cap || 84,
+          item.cumulativeDays || 12,
+          item.station || item.policeStation || '',
+          item.officer || item.officerName || '',
+          item.fileName || '',
+          item.fileUrl || item.driveLink || '',
+          item.downloaded || false,
+          item.closed || false,
+          item.closedDate || '',
+          item.courtFlag ? (typeof item.courtFlag === 'string' ? item.courtFlag : JSON.stringify(item.courtFlag)) : '',
+          item.returnedNote ? (typeof item.returnedNote === 'string' ? item.returnedNote : JSON.stringify(item.returnedNote)) : '',
+          item.history ? (typeof item.history === 'string' ? item.history : JSON.stringify(item.history)) : '[]',
+          item.createdAt || new Date().toISOString()
+        ]);
+      });
+      return responseJSON({ success: true, count: reqList.length });
+    }
+
+    // 2. UPLOAD PDF FILE TO GOOGLE DRIVE (Subfolder by สภ.)
+    if (action === 'uploadFile') {
+      let fileUrl = '';
+      let fileName = postData.fileName;
+      const folderId = postData.driveFolderId || DEFAULT_DRIVE_FOLDER_ID;
+
+      if (postData.fileData && postData.fileName) {
+        const bytes = Utilities.base64Decode(postData.fileData.split(',')[1] || postData.fileData);
+        const blob = Utilities.newBlob(bytes, 'application/pdf', postData.fileName);
+        
+        let targetFolder;
+        try {
+          targetFolder = DriveApp.getFolderById(folderId);
+        } catch (err) {
+          targetFolder = DriveApp.getRootFolder();
+        }
+        
+        const stationName = postData.station || postData.policeStation || 'ทั่วไป';
+        const folders = targetFolder.getFoldersByName(stationName);
+        let stationFolder;
+        
+        // Use existing subfolder if found, otherwise create subfolder
+        if (folders.hasNext()) {
+          stationFolder = folders.next();
+        } else {
+          stationFolder = targetFolder.createFolder(stationName);
+        }
+        
+        const file = stationFolder.createFile(blob);
+        file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+        fileUrl = file.getUrl();
+      }
+
+      return responseJSON({ success: true, fileName: fileName, fileUrl: fileUrl });
+    }
+
+    // 3. SAVE USER & SAVE USERS (Tab: users)
+    if (action === 'saveUser' || action === 'saveUsers') {
+      const sheet = ss.getSheetByName('users') || initUsersSheet(ss);
+      
+      if (action === 'saveUsers' || postData.users) {
+        const userList = postData.users || [];
+        sheet.clearContents();
+        sheet.appendRow(['Username', 'Password', 'Role', 'Station', 'Name', 'Status']);
+        userList.forEach(u => {
+          const uname = u.username ? String(u.username).trim() : '';
+          if (!uname) return;
+          const pass = uname === 'admin' ? 'caogikojt02' : (u.password || '123456');
+          const role = uname === 'admin' ? 'admin' : (u.role || 'officer');
+          const name = u.name ? String(u.name).trim() : uname;
+          sheet.appendRow([uname, pass, role, u.station || '', name, u.status || 'approved']);
+        });
+        return responseJSON({ success: true, count: userList.length });
+      }
+
+      const username = postData.username ? String(postData.username).trim() : '';
+      if (!username) {
+        return responseJSON({ success: false, error: 'Empty username' });
+      }
+
+      const rows = sheet.getDataRange().getValues();
+      let foundIndex = -1;
+      for (let i = 1; i < rows.length; i++) {
+        if (String(rows[i][0]).trim() === username) {
+          foundIndex = i + 1;
+          break;
+        }
+      }
+      const pass = username === 'admin' ? 'caogikojt02' : (postData.password || '123456');
+      const role = username === 'admin' ? 'admin' : (postData.role || 'officer');
+      const name = postData.name ? String(postData.name).trim() : username;
+
+      if (foundIndex > 0) {
+        sheet.getRange(foundIndex, 2).setValue(pass);
+        sheet.getRange(foundIndex, 3).setValue(role);
+        sheet.getRange(foundIndex, 4).setValue(postData.station || '');
+        sheet.getRange(foundIndex, 5).setValue(name);
+        sheet.getRange(foundIndex, 6).setValue('approved');
+      } else {
+        sheet.appendRow([username, pass, role, postData.station || '', name, 'approved']);
+      }
+      return responseJSON({ success: true });
+    }
+
+    // 4. SAVE HOLIDAYS (Tab: holidays)
+    if (action === 'saveHolidays') {
+      const sheet = ss.getSheetByName('holidays') || initHolidaysSheet(ss);
+      sheet.clearContents();
+      sheet.appendRow(['Date', 'Name']);
+      (postData.holidays || []).forEach(h => {
+        sheet.appendRow([h.date, h.name]);
+      });
+      return responseJSON({ success: true });
+    }
+
+    return responseJSON({ success: false, error: 'Unknown action' });
+
+  } catch (err) {
+    return responseJSON({ success: false, error: err.toString() });
+  }
+}
+
+function initRequestsSheet(ss) {
+  const s = ss.insertSheet('requests');
+  s.appendRow(['CaseNumber', 'Type', 'StartDate', 'K', 'Cap', 'CumulativeDays', 'Station', 'Officer', 'FileName', 'FileUrl', 'Downloaded', 'Closed', 'ClosedDate', 'CourtFlag', 'ReturnedNote', 'History', 'CreatedAt']);
+  return s;
+}
+
+function initUsersSheet(ss) {
+  const s = ss.insertSheet('users');
+  s.appendRow(['Username', 'Password', 'Role', 'Station', 'Name', 'Status']);
+  s.appendRow(['admin', 'caogikojt02', 'admin', '', 'ผู้ดูแลระบบสูงสุด (System Admin)', 'approved']);
+  return s;
+}
+
+function initHolidaysSheet(ss) {
+  const s = ss.insertSheet('holidays');
+  s.appendRow(['Date', 'Name']);
+  return s;
+}
+
+function parseJSON(str) {
+  try {
+    return typeof str === 'string' ? JSON.parse(str) : str;
+  } catch (e) {
+    return null;
+  }
+}
+
+function responseJSON(data) {
+  return ContentService.createTextOutput(JSON.stringify(data))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+</pre>
+        </div>
+
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.25rem; border-top: 1px solid #e2e8f0; padding-top: 1rem;">
+        <button type="button" onclick="closeModal('configGuideModal')" class="btn-secondary">ปิดคู่มือ</button>
+      </div>
     </div>
   </div>
 
