@@ -876,11 +876,11 @@ function renderAppLayout() {
   setElementDisplay('navItemStationInbox', isPolice ? 'block' : 'none');
   setElementDisplay('navItemDownloadICS', isPolice ? 'block' : 'none');
 
-  // SPEC: เมนูจัดการผู้ใช้งานและตั้งค่าเชื่อมต่อ Google Services ทำได้เฉพาะสิทธิผู้ดูแลระบบเท่านั้น
-  setElementDisplay('navCategoryAdmin', isCourt ? 'block' : 'none');
+  // SPEC: เมนูการจัดการระบบ (จัดการผู้ใช้/ตั้งค่า Google/คู่มือตั้งค่า) ทำได้เฉพาะสิทธิผู้ดูแลระบบเท่านั้น
+  setElementDisplay('navCategoryAdmin', isAdmin ? 'block' : 'none');
   setElementDisplay('navItemUsers', isAdmin ? 'block' : 'none');
   setElementDisplay('navItemGoogleSettings', isAdmin ? 'block' : 'none');
-  setElementDisplay('navItemConfigGuide', isCourt ? 'block' : 'none');
+  setElementDisplay('navItemConfigGuide', isAdmin ? 'block' : 'none');
 
   // Setup Mobile Bottom Nav items based on Role
   setElementDisplay('mbNavQuickUpload', isPolice ? 'flex' : 'none');
@@ -2713,6 +2713,17 @@ function openConfigGuideModal(event) {
   if (event) {
     try { if (typeof event.preventDefault === 'function') event.preventDefault(); } catch (e) {}
     try { if (typeof event.stopPropagation === 'function') event.stopPropagation(); } catch (e) {}
+  }
+  if (!currentUser || currentUser.role !== 'admin') {
+    if (typeof Swal !== 'undefined') {
+      Swal.fire({
+        icon: 'error',
+        title: 'ไม่มีสิทธิ์เข้าถึง',
+        text: 'เฉพาะสิทธิผู้ดูแลระบบ (Admin) เท่านั้นที่สามารถเปิดดูคู่มือการตั้งค่าระบบได้',
+        confirmButtonColor: '#1e3a8a'
+      });
+    }
+    return;
   }
   // Auto-close SweetAlert on mobile screens (< 768px)
   if (window.innerWidth < 768 && typeof Swal !== 'undefined' && Swal.isVisible && Swal.isVisible()) {
