@@ -70,7 +70,7 @@ function doGet(e) {
       const r = rows[i];
       if (!r[0]) continue;
       holidays.push({
-        date: String(r[0]),
+        date: toISODate(r[0]),
         name: String(r[1])
       });
     }
@@ -90,7 +90,7 @@ function doGet(e) {
     requests.push({
       caseNumber: String(r[0]),
       type: String(r[1] || 'ฝ.'),
-      startDate: String(r[2]),
+      startDate: toISODate(r[2]),
       k: Number(r[3]) || 2,
       cap: Number(r[4]) || 84,
       cumulativeDays: Number(r[5]) || 12,
@@ -100,7 +100,7 @@ function doGet(e) {
       fileUrl: r[9] ? String(r[9]) : null,
       downloaded: r[10] === true || String(r[10]).toUpperCase() === 'TRUE',
       closed: r[11] === true || String(r[11]).toUpperCase() === 'TRUE',
-      closedDate: r[12] ? String(r[12]) : null,
+      closedDate: r[12] ? toISODate(r[12]) : null,
       courtFlag: r[13] ? parseJSON(r[13]) : null,
       returnedNote: r[14] ? parseJSON(r[14]) : null,
       history: r[15] ? parseJSON(r[15]) : [],
@@ -308,6 +308,49 @@ function parseJSON(str) {
   } catch (e) {
     return null;
   }
+}
+
+/**
+ * แปลง Date object หรือ string ต่างๆ ที่ได้จาก Google Sheet
+ * ให้เป็น ISO date string รูปแบบ YYYY-MM-DD เสมอ
+ * ถ้า val ว่างหรือ invalid คืนค่า ''
+ */
+function toISODate(val) {
+  if (!val) return '';
+  var d;
+  if (val instanceof Date) {
+    d = val;
+  } else {
+    var str = String(val).trim();
+    if (!str || str.toLowerCase() === 'date' || str === 'วันที่') return '';
+    if (str.includes('/')) {
+      var parts = str.split('/');
+      if (parts.length === 3) {
+        var p1 = parseInt(parts[0], 10);
+        var p2 = parseInt(parts[1], 10);
+        var p3 = parseInt(parts[2], 10);
+        if (p3 > 2400) p3 -= 543;
+        if (p1 > 2400) p1 -= 543;
+        if (p1 > 31) {
+          d = new Date(p1, p2 - 1, p3);
+        } else {
+          d = new Date(p3, p2 - 1, p1);
+        }
+      }
+    } else if (str.includes('-')) {
+      var parts = str.split('-');
+      if (parts.length === 3) {
+        var y = parseInt(parts[0], 10);
+        if (y > 2400) y -= 543;
+        var m = parseInt(parts[1], 10) - 1;
+        var day = parseInt(parts[2], 10);
+        d = new Date(y, m, day);
+      }
+    }
+    if (!d || isNaN(d.getTime())) d = new Date(str);
+  }
+  if (!d || isNaN(d.getTime())) return '';
+  return Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy-MM-dd');
 }
 
 function responseJSON(data) {

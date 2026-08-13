@@ -1128,10 +1128,13 @@ function doGet(e) {
     for (let i = 1; i < rows.length; i++) {
       const r = rows[i];
       if (!r[0]) continue;
-      holidays.push({
-        date: String(r[0]),
-        name: String(r[1])
-      });
+      var dateISO = toISODate(r[0]);
+      if (dateISO) {
+        holidays.push({
+          date: dateISO,
+          name: String(r[1] || '').trim()
+        });
+      }
     }
     return responseJSON(holidays);
   }
@@ -1367,6 +1370,44 @@ function parseJSON(str) {
   } catch (e) {
     return null;
   }
+}
+
+function toISODate(val) {
+  if (!val) return '';
+  var d;
+  if (val instanceof Date) {
+    d = val;
+  } else {
+    var str = String(val).trim();
+    if (!str || str.toLowerCase() === 'date' || str === 'วันที่') return '';
+    if (str.includes('/')) {
+      var parts = str.split('/');
+      if (parts.length === 3) {
+        var p1 = parseInt(parts[0], 10);
+        var p2 = parseInt(parts[1], 10);
+        var p3 = parseInt(parts[2], 10);
+        if (p3 > 2400) p3 -= 543;
+        if (p1 > 2400) p1 -= 543;
+        if (p1 > 31) {
+          d = new Date(p1, p2 - 1, p3);
+        } else {
+          d = new Date(p3, p2 - 1, p1);
+        }
+      }
+    } else if (str.includes('-')) {
+      var parts = str.split('-');
+      if (parts.length === 3) {
+        var y = parseInt(parts[0], 10);
+        if (y > 2400) y -= 543;
+        var m = parseInt(parts[1], 10) - 1;
+        var day = parseInt(parts[2], 10);
+        d = new Date(y, m, day);
+      }
+    }
+    if (!d || isNaN(d.getTime())) d = new Date(str);
+  }
+  if (!d || isNaN(d.getTime())) return '';
+  return Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy-MM-dd');
 }
 
 function responseJSON(data) {
