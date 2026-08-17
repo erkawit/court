@@ -190,6 +190,28 @@ function isPastCutoff(filingDeadlineISO, now = new Date()) {
   return now > cutoff;
 }
 
+function checkSubmissionWindow(now = new Date()) {
+  const holidays = (typeof getHolidays === 'function') ? getHolidays() : DEFAULT_HOLIDAYS;
+  const nowISO = toISO(now);
+  const isWknd = isWeekend(now);
+  const isHoli = isHoliday(nowISO, holidays);
+  const hours = now.getHours();
+  const minutes = now.getMinutes();
+  const timeStr = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')} น.`;
+
+  if (isWknd) {
+    return { isOpen: false, reason: 'weekend', message: 'วันหยุดเสาร์-อาทิตย์ (ปิดรับยื่น)', timeStr };
+  }
+  if (isHoli) {
+    const holiObj = (holidays || []).find(h => h.date === nowISO);
+    return { isOpen: false, reason: 'holiday', message: `วันหยุดราชการ (${holiObj ? holiObj.name : 'วันหยุด'})`, timeStr };
+  }
+  if (hours >= FILING_CUTOFF_HOUR) {
+    return { isOpen: false, reason: 'past_16', message: `เลยเวลา 16.00 น. แล้ว (${timeStr}) — ปิดรับยื่นทางอิเล็กทรอนิกส์`, timeStr };
+  }
+  return { isOpen: true, reason: 'open', message: `เปิดรับยื่นคำร้องอิเล็กทรอนิกส์ (ยื่นได้ถึง 16.00 น.)`, timeStr };
+}
+
 function capMaxK(cap) {
   return CAP_MAX_K[cap] || null;
 }
@@ -548,17 +570,14 @@ function getUsers() {
   return users;
 }
 
-const AUTO_SYNC_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes auto-sync interval
 let autoSyncTimerId = null;
 
 function startAutoSyncTimer() {
-  if (autoSyncTimerId) clearInterval(autoSyncTimerId);
-  autoSyncTimerId = setInterval(() => {
-    if (currentUser) {
-      console.log('[e-REDT Court] 10-minute periodic auto-sync running...');
-      fetchLiveGoogleSheetData({ isAutoRefresh: true });
-    }
-  }, AUTO_SYNC_INTERVAL_MS);
+  // Auto-sync timer disabled per user request
+  if (autoSyncTimerId) {
+    clearInterval(autoSyncTimerId);
+    autoSyncTimerId = null;
+  }
 }
 
 function stopAutoSyncTimer() {
@@ -578,13 +597,6 @@ function syncToGoogleSheet(actionName, payload) {
       mode: 'no-cors',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: actionName, ...payload })
-    }).then(() => {
-      // Immediate background re-sync to ensure local cache matches Sheet
-      setTimeout(() => {
-        if (typeof fetchLiveGoogleSheetData === 'function') {
-          fetchLiveGoogleSheetData({ isAutoRefresh: true });
-        }
-      }, 1200);
     }).catch(err => {
       console.warn('Google Sheet Sync warning:', err);
     });
@@ -696,7 +708,9 @@ function handleRealtimeMessage(msg) {
 function saveUsers(users) {
   const validUsers = (users || []).filter(u => u && u.username && String(u.username).trim() !== '');
   localStorage.setItem('eredt_users', JSON.stringify(validUsers));
-  syncToGoogleSheet('saveUsers', { users: validUsers });
+  if (validUsers.length > 0) {
+    syncToGoogleSheet('saveUsers', { users: validUsers });
+  }
   broadcastRealtimeUpdate('USERS_UPDATED');
 }
 
@@ -716,7 +730,9 @@ function getRequests() {
 
 function saveRequests(requests) {
   localStorage.setItem('eredt_requests', JSON.stringify(requests));
-  syncToGoogleSheet('saveRequests', { requests });
+  if (requests && requests.length > 0) {
+    syncToGoogleSheet('saveRequests', { requests });
+  }
   broadcastRealtimeUpdate('REQUESTS_UPDATED');
 }
 
@@ -726,7 +742,9 @@ function getHolidays() {
 
 function saveHolidays(holidays) {
   localStorage.setItem('eredt_holidays', JSON.stringify(holidays));
-  syncToGoogleSheet('saveHolidays', { holidays });
+  if (holidays && holidays.length > 0) {
+    syncToGoogleSheet('saveHolidays', { holidays });
+  }
   broadcastRealtimeUpdate('HOLIDAYS_UPDATED');
 }
 
@@ -850,9 +868,6 @@ function checkSession() {
 
   if (currentUser) {
     renderAppLayout();
-    startAutoSyncTimer();
-    // Auto-sync live data from Google Sheet on refresh/load for ALL logged in users
-    fetchLiveGoogleSheetData({ isAutoRefresh: true });
   } else {
     showLoginView();
   }
@@ -1034,7 +1049,8 @@ function renderAppLayout() {
     document.body.className = '';
   }
 
-  // SPEC ข้อ 3: officer ทุกบัญชีมีสิทธิ์เท่ากัน (ทำหน้าที่ผู้ดูแลระบบร่วมกัน)
+  // สิทธิ์ผู้ดูแลระบบ (Admin) vs เจ้าหน้าที่ศาลทั่วไป (Officer)
+  const isAdmin = (currentUser.role === 'admin');
   const isCourt = (currentUser.role === 'officer' || currentUser.role === 'admin');
   const isPolice = (currentUser.role === 'police');
 
@@ -1047,16 +1063,16 @@ function renderAppLayout() {
   setElementDisplay('navItemStationInbox', isPolice ? 'block' : 'none');
   setElementDisplay('navItemDownloadICS', isPolice ? 'block' : 'none');
 
-  // SPEC: เมนูจัดการผู้ใช้งานและตั้งค่าเชื่อมต่อ Google Services ทำได้สำหรับเจ้าหน้าที่ศาลทุกคน
-  setElementDisplay('navCategoryAdmin', isCourt ? 'block' : 'none');
-  setElementDisplay('navItemUsers', isCourt ? 'block' : 'none');
-  setElementDisplay('navItemGoogleSettings', isCourt ? 'block' : 'none');
+  // หากไม่ใช่สิทธิผู้ดูแลระบบ ให้ซ่อนปุ่ม sidebar "จัดการผู้ใช้งาน" และปุ่ม "เชื่อมต่อ Google Services"
+  setElementDisplay('navCategoryAdmin', isAdmin ? 'block' : 'none');
+  setElementDisplay('navItemUsers', isAdmin ? 'block' : 'none');
+  setElementDisplay('navItemGoogleSettings', isAdmin ? 'block' : 'none');
 
   // Setup Mobile Bottom Nav items based on Role
   setElementDisplay('mbNavQuickUpload', isPolice ? 'flex' : 'none');
   setElementDisplay('mbNavInbox', isPolice ? 'flex' : 'none');
   setElementDisplay('mbNavCreateBatch', isCourt ? 'flex' : 'none');
-  setElementDisplay('mbNavAdmin', isCourt ? 'flex' : 'none');
+  setElementDisplay('mbNavAdmin', isAdmin ? 'flex' : 'none');
 
   // Sync Button visible for all court officers
   setElementDisplay('btnSyncGoogleSheet', isCourt ? 'inline-flex' : 'none');
@@ -1068,7 +1084,7 @@ function renderAppLayout() {
   }
   let savedView = hashView || sessionStorage.getItem('eredt_last_view') || 'dashboard';
   
-  if (savedView === 'admin' && !isCourt) {
+  if (savedView === 'admin' && !isAdmin) {
     savedView = 'dashboard';
   }
   
@@ -1085,6 +1101,16 @@ function switchView(viewName, event, subTab) {
   // Auto-close SweetAlert on mobile screens (< 768px) before rendering view
   if (window.innerWidth < 768 && typeof Swal !== 'undefined' && Swal.isVisible && Swal.isVisible()) {
     Swal.close();
+  }
+
+  // ป้องกันการเข้าถึงหน้า admin หากไม่ใช่ผู้ดูแลระบบ
+  if (viewName === 'admin' && (!currentUser || currentUser.role !== 'admin')) {
+    Swal.fire({
+      icon: 'warning',
+      title: 'ไม่มีสิทธิ์เข้าถึง',
+      text: 'เฉพาะสิทธิผู้ดูแลระบบ (Admin) เท่านั้นที่สามารถจัดการผู้ใช้งานและตั้งค่าระบบได้'
+    });
+    viewName = 'dashboard';
   }
 
   currentActiveView = viewName;
@@ -3731,12 +3757,12 @@ function openGoogleSettingsModal(event) {
     try { if (typeof event.stopPropagation === 'function') event.stopPropagation(); } catch (e) {}
   }
 
-  if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'officer')) {
+  if (!currentUser || currentUser.role !== 'admin') {
     if (typeof Swal !== 'undefined') {
       Swal.fire({
         icon: 'error',
         title: 'ไม่มีสิทธิ์เข้าถึง',
-        text: 'เฉพาะสิทธิเจ้าหน้าที่ศาลและผู้ดูแลระบบเท่านั้นที่สามารถตั้งค่าการเชื่อมต่อ Google Services ได้',
+        text: 'เฉพาะสิทธิผู้ดูแลระบบ (Admin) เท่านั้นที่สามารถตั้งค่าการเชื่อมต่อ Google Services ได้',
         confirmButtonColor: '#1e3a8a'
       });
     }
@@ -4037,6 +4063,32 @@ async function fetchLiveGoogleSheetData(options = {}) {
     }
   }
 
+  async function safeFetchCsv(url) {
+    try {
+      // Use redirect: 'error' to prevent browser from following 302 login redirects to accounts.google.com
+      const res = await fetch(url, { method: 'GET', mode: 'cors', redirect: 'error' });
+      if (!res.ok) return null;
+      const txt = await res.text();
+      if (!txt || txt.includes('<!DOCTYPE html>') || txt.includes('<html') || txt.includes('accounts.google.com')) {
+        return null;
+      }
+      return txt;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  async function safeFetchJson(url) {
+    try {
+      const res = await fetch(url, { method: 'GET', mode: 'cors' });
+      if (!res.ok) return null;
+      if (res.redirected && res.url.includes('accounts.google.com')) return null;
+      return await res.json();
+    } catch (e) {
+      return null;
+    }
+  }
+
   try {
     updateProgress(15, 'กำลังเชื่อมต่อ Google Sheet API...');
 
@@ -4050,47 +4102,38 @@ async function fetchLiveGoogleSheetData(options = {}) {
     // 1. Primary: Fetch via Apps Script WebApp if scriptUrl configured
     if (scriptUrl && scriptUrl.trim() !== '') {
       updateProgress(35, 'กำลังโหลดข้อมูลคดี...');
-      try {
-        const resReq = await fetch(`${scriptUrl}?action=getRequests`);
-        requestsData = await resReq.json();
-      } catch(e) { console.warn('Script getRequests error:', e); }
+      requestsData = await safeFetchJson(`${scriptUrl}?action=getRequests`);
 
       updateProgress(65, 'กำลังโหลดข้อมูลผู้ใช้งาน...');
-      try {
-        const resUser = await fetch(`${scriptUrl}?action=getUsers`);
-        usersData = await resUser.json();
-      } catch(e) { console.warn('Script getUsers error:', e); }
+      usersData = await safeFetchJson(`${scriptUrl}?action=getUsers`);
 
       updateProgress(85, 'กำลังโหลดข้อมูลวันหยุด...');
-      try {
-        const resHol = await fetch(`${scriptUrl}?action=getHolidays`);
-        holidaysData = await resHol.json();
-      } catch(e) { console.warn('Script getHolidays error:', e); }
+      holidaysData = await safeFetchJson(`${scriptUrl}?action=getHolidays`);
     }
 
     // 2. CSV API Fallback (Public CSV Endpoint)
     if (!requestsData || !Array.isArray(requestsData)) {
       updateProgress(40, 'กำลังโหลดข้อมูลคดีจาก Google Sheet (CSV)...');
-      try {
-        const csvReq = await fetch(`${csvBaseUrl}data`).then(r => r.text());
+      const csvReq = await safeFetchCsv(`${csvBaseUrl}data`);
+      if (csvReq) {
         requestsData = parseRequestsCSV(csvReq);
-      } catch (e) { console.warn('CSV data fallback failed:', e); }
+      }
     }
 
     if (!usersData || !Array.isArray(usersData) || usersData.length === 0) {
       updateProgress(70, 'กำลังโหลดข้อมูลผู้ใช้จาก Google Sheet (CSV)...');
-      try {
-        const csvUser = await fetch(`${csvBaseUrl}users`).then(r => r.text());
+      const csvUser = await safeFetchCsv(`${csvBaseUrl}users`);
+      if (csvUser) {
         usersData = parseUsersCSV(csvUser);
-      } catch (e) { console.warn('CSV users fallback failed:', e); }
+      }
     }
 
     if (!holidaysData || !Array.isArray(holidaysData)) {
       updateProgress(85, 'กำลังโหลดข้อมูลวันหยุดจาก Google Sheet (CSV)...');
-      try {
-        const csvHol = await fetch(`${csvBaseUrl}holidays`).then(r => r.text());
+      const csvHol = await safeFetchCsv(`${csvBaseUrl}holidays`);
+      if (csvHol) {
         holidaysData = parseHolidaysCSV(csvHol);
-      } catch (e) { console.warn('CSV holidays fallback failed:', e); }
+      }
     }
 
     updateProgress(95, 'กำลังอัพเดทระบบ...');
@@ -4126,12 +4169,21 @@ async function fetchLiveGoogleSheetData(options = {}) {
       }, 250);
     }
   } catch (err) {
-    console.error('Fetch live data error:', err);
+    console.warn('Fetch live data notice:', err);
     if (hasOpenedSwal) {
       Swal.fire({
-        icon: 'error',
-        title: 'เกิดข้อผิดพลาดในการโหลดข้อมูล',
-        text: err.toString()
+        icon: 'warning',
+        title: 'ไม่สามารถดึงข้อมูลจาก Google Sheet ได้',
+        html: `
+          <div style="font-size: 0.85rem; text-align: left;">
+            <p style="margin-bottom: 0.5rem;">โปรดตรวจสอบสิทธิ์การแชร์ของ Google Sheet ดังนี้:</p>
+            <ol style="padding-left: 1.25rem; line-height: 1.5;">
+              <li>เปิด Google Sheet ของท่าน</li>
+              <li>คลิกปุ่ม <b>"แชร์" (Share)</b> ที่มุมขวาบน</li>
+              <li>ตรง "การเข้าถึงทั่วไป" ให้เปลี่ยนเป็น <b>"ทุกคนที่มีลิงก์" (Anyone with the link)</b> และกำหนดสิทธิ์เป็น <b>"ผู้มีสิทธิ์ดู" (Viewer)</b></li>
+            </ol>
+          </div>
+        `
       });
     }
   } finally {
