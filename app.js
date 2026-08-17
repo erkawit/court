@@ -8,6 +8,11 @@ if (typeof pdfjsLib !== 'undefined') {
   pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 }
 
+// Configure DataTables global error mode
+if (typeof jQuery !== 'undefined' && typeof jQuery.fn.DataTable !== 'undefined') {
+  jQuery.fn.dataTable.ext.errMode = 'none';
+}
+
 const SPREADSHEET_ID = '1Y-OA9B8cPRwTcILCB9lmLny2GrfcEnNqR5i07lTGDM4';
 const DEFAULT_GOOGLE_SHEET_CSV = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/pub?output=csv`;
 const DEFAULT_GOOGLE_SCRIPT_WEBAPP = '';
@@ -21,7 +26,7 @@ const DAYS_PER_OCCASION = 12; // ป.วิ.อาญา ม.87: ฝากขั
 const FILING_CUTOFF_HOUR = 16; // ข้อ 6: ยื่นทางระบบได้ไม่เกิน 16.00 น.
 const PURGE_DAYS = 60;
 const FILE_PURGE_DAYS = 12; // ไฟล์ PDF ถูกลบอัตโนมัติ 12 วันหลังอัพโหลด (SPEC ข้อ 6)
-const CAP_MAX_K = { 48: 4, 84: 7 };
+const CAP_MAX_K = { 12: 1, 48: 4, 84: 7 };
 const MAX_UPLOAD_SIZE_BYTES = 20 * 1024 * 1024; // 20 MB
 const ALLOWED_UPLOAD_EXTENSION = ".pdf";
 
@@ -305,7 +310,7 @@ function receiveOccasion(rawCase, holidays, newCap = null, actualDays = null, no
   };
   const history = [...(rawCase.history || []), historyEntry];
 
-  const maxK = cap === 48 ? 4 : cap === 84 ? 7 : 7;
+  const maxK = cap === 12 ? 1 : (cap === 48 ? 4 : (cap === 84 ? 7 : 7));
   if (rawCase.k >= maxK) {
     return { ...rawCase, cap, cumulativeDays: newCumulativeDays, closed: true, closedDate: toISO(now), fileName: null, downloaded: false, courtFlag: null, uploadedAt: null, history };
   }
@@ -314,8 +319,11 @@ function receiveOccasion(rawCase, holidays, newCap = null, actualDays = null, no
 
 function updateCap(rawCase, newCap) {
   const cap = Number(newCap);
-  if (cap !== 48 && cap !== 84) {
-    return { case: rawCase, ok: false, reason: "ค่าเพดานฝากขังต้องเป็น 48 วัน หรือ 84 วันเท่านั้น" };
+  if (cap !== 12 && cap !== 48 && cap !== 84) {
+    return { case: rawCase, ok: false, reason: "ค่าเพดานฝากขังต้องเป็น 12 วัน, 48 วัน หรือ 84 วันเท่านั้น" };
+  }
+  if (rawCase.k > 1 && cap === 12) {
+    return { case: rawCase, ok: false, reason: "ไม่สามารถลดเพดานเป็น 12 วัน (1 ครั้ง) ได้ เนื่องจากคดีดำเนินการถึงครั้งที่ " + rawCase.k + " แล้ว" };
   }
   if (rawCase.k > 4 && cap === 48) {
     return { case: rawCase, ok: false, reason: "ไม่สามารถลดเพดานเป็น 48 วัน (4 ครั้ง) ได้ เนื่องจากคดีดำเนินการถึงครั้งที่ " + rawCase.k + " แล้ว" };
@@ -1015,6 +1023,8 @@ function switchView(viewName, event, subTab) {
     } else {
       setElementDisplay('policeRequestsSection', 'none');
       setElementDisplay('courtRequestsSection', 'block');
+      setElementClass('navItemRequests', 'active', true);
+      setElementClass('mbNavRequests', 'active', true);
       renderCourtView();
     }
   } else if (viewName === 'admin') {
@@ -1134,10 +1144,8 @@ function renderCalendar(cases) {
 
     dayCell.appendChild(headerRow);
 
-    // Cases matching filingDeadline or legalDeadline
+    // Cases matching filingDeadline (วันต้องยื่นคำร้อง)
     const filingCases = cases.filter(c => c.filingDeadline === dayISO && !c.closed);
-    const legalCases = cases.filter(c => c.legalDeadline === dayISO && !c.closed);
-    const totalDayCases = cases.filter(c => c.filingDeadline === dayISO || c.legalDeadline === dayISO);
 
     const badgesContainer = document.createElement('div');
     badgesContainer.className = 'calendar-badges-container';
@@ -1149,14 +1157,7 @@ function renderCalendar(cases) {
       badgesContainer.appendChild(fBadge);
     }
 
-    if (legalCases.length > 0) {
-      const lBadge = document.createElement('div');
-      lBadge.className = 'calendar-count-badge badge-legal';
-      lBadge.innerHTML = `<span><i class="fa-solid fa-gavel"></i> ครบกำหนด</span> <span class="count-number-pill">${legalCases.length}</span>`;
-      badgesContainer.appendChild(lBadge);
-    }
-
-    if (totalDayCases.length > 0) {
+    if (filingCases.length > 0) {
       dayCell.appendChild(badgesContainer);
       dayCell.onclick = (e) => {
         e.stopPropagation();
@@ -1177,7 +1178,7 @@ function openDayDetailModal(dayISO) {
   const holidays = getHolidays();
   const enriched = rawRequests.map(r => enrichCase(r, holidays));
 
-  let filtered = enriched.filter(c => c.filingDeadline === dayISO || c.legalDeadline === dayISO);
+  let filtered = enriched.filter(c => c.filingDeadline === dayISO);
   const isPolice = (currentUser && currentUser.role === 'police');
   if (isPolice) {
     filtered = filtered.filter(c => c.officer === currentUser.username);
@@ -2046,6 +2047,17 @@ function renderCourtRequestsTable() {
   const holidays = getHolidays();
   const enriched = rawRequests.map(r => enrichCase(r, holidays));
 
+  // Update today's documents count badge
+  const todayISO = toISO(new Date());
+  const todayDocs = enriched.filter(c => 
+    (c.filingDeadline === todayISO || (c.uploadedAt && c.uploadedAt.startsWith(todayISO))) &&
+    c.fileName
+  );
+  const badgeEl = document.getElementById('todayDocsCountBadge');
+  if (badgeEl) {
+    badgeEl.textContent = todayDocs.length;
+  }
+
   let filtered = enriched;
   if (stationFilter) filtered = filtered.filter(c => c.station === stationFilter);
 
@@ -2071,11 +2083,24 @@ function renderCourtRequestsTable() {
     );
   }
 
+  const isDesktop = (window.innerWidth >= 768);
+
+  // Suppress native alert popups from DataTables globally
+  if (typeof jQuery !== 'undefined' && typeof jQuery.fn.DataTable !== 'undefined') {
+    jQuery.fn.dataTable.ext.errMode = 'none';
+    const tableEl = $('#courtRequestsDataTable');
+    if ($.fn.DataTable.isDataTable(tableEl)) {
+      tableEl.DataTable().destroy();
+    }
+  }
+
   const tbody = document.getElementById('courtTableBody');
   tbody.innerHTML = '';
 
   if (filtered.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="11" style="text-align: center; color: var(--text-muted); padding: 1.5rem;">ไม่พบรายการคำร้องฝากขังตรงตามเงื่อนไขการค้นหา</td></tr>`;
+    if (!isDesktop) {
+      tbody.innerHTML = `<tr><td colspan="11" style="text-align: center; color: var(--text-muted); padding: 1.5rem;">ไม่พบรายการคำร้องฝากขังตรงตามเงื่อนไขการค้นหา</td></tr>`;
+    }
   } else {
     filtered.forEach(c => {
       const typeBadge = c.type === 'ยฝ.' ? '<span class="badge badge-type-yf">ยฝ.</span>' : '<span class="badge badge-type-f">ฝ.</span>';
@@ -2118,6 +2143,8 @@ function renderCourtRequestsTable() {
         courtActions = `<span class="badge badge-status-closed">ปิดคดีแล้ว</span>`;
       }
 
+      const capTimes = c.cap === 12 ? 1 : (c.cap === 48 ? 4 : 7);
+
       const tr = document.createElement('tr');
       tr.onclick = (e) => {
         if (window.innerWidth <= 768 && !e.target.closest('button') && !e.target.closest('a')) {
@@ -2136,7 +2163,7 @@ function renderCourtRequestsTable() {
         <td><b style="color: #b45309;">${formatThaiDate(c.filingDeadline)}</b></td>
         <td>${formatThaiDate(c.legalDeadline)}</td>
         <td>
-          ${c.cap || 84} วัน
+          ${c.cap || 84} วัน (${capTimes} ครั้ง)
           ${!c.closed ? `<button onclick="openEditCapModal('${c.caseNumber}')" class="btn-secondary" style="padding: 0.15rem 0.35rem; font-size: 0.7rem; width: auto; margin-left: 0.25rem;" title="แก้ไขเพดานฝากขัง"><i class="fa-solid fa-pen"></i></button>` : ''}
         </td>
         <td>${renderStatusBadge(c.status)}</td>
@@ -2144,6 +2171,33 @@ function renderCourtRequestsTable() {
         <td>${courtActions}</td>
       `;
       tbody.appendChild(tr);
+    });
+  }
+
+  // Initialize DataTables for desktop & tablet landscape screens (>= 768px)
+  if (isDesktop && typeof jQuery !== 'undefined' && typeof jQuery.fn.DataTable !== 'undefined') {
+    jQuery.fn.dataTable.ext.errMode = 'none';
+    $('#courtRequestsDataTable').DataTable({
+      pageLength: 25,
+      lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "ทั้งหมด"]],
+      order: [],
+      language: {
+        search: "ค้นหาในตาราง:",
+        lengthMenu: "แสดง _MENU_ รายการต่อหน้า",
+        info: "แสดง _START_ ถึง _END_ จากทั้งหมด _TOTAL_ รายการ",
+        infoEmpty: "แสดง 0 ถึง 0 จาก 0 รายการ",
+        infoFiltered: "(กรองจากทั้งหมด _MAX_ รายการ)",
+        zeroRecords: "ไม่พบรายการคำร้องฝากขังตรงตามเงื่อนไขการค้นหา",
+        emptyTable: "ไม่มีรายการข้อมูลคำร้องฝากขัง",
+        paginate: {
+          first: '<i class="fa-solid fa-angles-left"></i>',
+          last: '<i class="fa-solid fa-angles-right"></i>',
+          next: '<i class="fa-solid fa-angle-right"></i>',
+          previous: '<i class="fa-solid fa-angle-left"></i>'
+        }
+      },
+      dom: '<"top"lf>rt<"bottom"ip><"clear">',
+      responsive: true
     });
   }
 }
@@ -2164,19 +2218,210 @@ function downloadCourtFile(caseNumber) {
   }
 }
 
+async function downloadTodayAllDocuments() {
+  const todayISO = toISO(new Date());
+  const rawRequests = getRequests();
+  const holidays = getHolidays();
+  const enriched = rawRequests.map(r => enrichCase(r, holidays));
+
+  const todayDocs = enriched.filter(c => 
+    (c.filingDeadline === todayISO || (c.uploadedAt && c.uploadedAt.startsWith(todayISO))) &&
+    c.fileName
+  );
+
+  if (todayDocs.length === 0) {
+    Swal.fire({
+      icon: 'info',
+      title: 'ไม่มีเอกสารสำหรับดาวน์โหลด',
+      text: `ไม่มีรายการคำร้องที่มีเอกสารแนบ ณ วันปัจจุบัน (${formatThaiDate(todayISO)})`,
+      confirmButtonText: 'ตกลง',
+      confirmButtonColor: '#1e3a8a'
+    });
+    return;
+  }
+
+  // Case 1: Exactly 1 file -> Direct download without compression
+  if (todayDocs.length === 1) {
+    const singleDoc = todayDocs[0];
+    const targetIdx = rawRequests.findIndex(r => r.caseNumber === singleDoc.caseNumber);
+    if (targetIdx !== -1) {
+      rawRequests[targetIdx].downloaded = true;
+      saveRequests(rawRequests);
+    }
+
+    if (singleDoc.fileUrl) {
+      const a = document.createElement('a');
+      a.href = singleDoc.fileUrl;
+      a.download = singleDoc.fileName || `${singleDoc.caseNumber}.pdf`;
+      a.target = '_blank';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } else {
+      const blob = new Blob([`%PDF-1.4\n% e-REDT PDF Document for ${singleDoc.caseNumber}\n`], { type: 'application/pdf' });
+      if (typeof saveAs !== 'undefined') {
+        saveAs(blob, singleDoc.fileName || `${singleDoc.caseNumber}.pdf`);
+      } else {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = singleDoc.fileName || `${singleDoc.caseNumber}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+    }
+
+    Swal.fire({
+      icon: 'success',
+      title: 'ดาวน์โหลดเอกสารสำเร็จ',
+      html: `ดาวน์โหลดเอกสารเลขคดี <b>${singleDoc.caseNumber}</b> (${singleDoc.fileName || 'ไฟล์คำร้อง'}) เรียบร้อยแล้ว`,
+      timer: 2000,
+      showConfirmButton: false
+    });
+    renderCourtRequestsTable();
+    return;
+  }
+
+  // Case 2: More than 1 file -> Compress (ZIP DEFLATE) before download
+  Swal.fire({
+    title: 'กำลังบีบอัดและดาวน์โหลดเอกสาร...',
+    html: `พบไฟล์เอกสารทั้งหมด <b>${todayDocs.length}</b> ไฟล์ กำลังดำเนินการบีบอัดไฟล์ (ZIP Compress)...`,
+    allowOutsideClick: false,
+    didOpen: () => { Swal.showLoading(); }
+  });
+
+  try {
+    if (typeof JSZip !== 'undefined') {
+      const zip = new JSZip();
+      const folderName = `คำร้องฝากขัง_ประจำวันที่_${todayISO}`;
+      const zipFolder = zip.folder(folderName);
+      
+      for (let i = 0; i < todayDocs.length; i++) {
+        const item = todayDocs[i];
+        const safeCaseNum = (item.caseNumber || 'case').replace(/[\/\\]/g, '_');
+        const stationName = (item.station || 'สภ_ไม่ระบุ').replace(/[\/\\]/g, '_');
+        const filename = `${safeCaseNum}_${stationName}_${item.fileName}`;
+        
+        try {
+          if (item.fileUrl) {
+            const resp = await fetch(item.fileUrl);
+            if (resp.ok) {
+              const blob = await resp.blob();
+              zipFolder.file(filename, blob);
+            } else {
+              zipFolder.file(filename + '.txt', `เอกสารคำร้องเลขคดี: ${item.caseNumber}\nสถานี: ${item.station}\nURL: ${item.fileUrl}`);
+            }
+          } else {
+            const dummyPdfContent = `%PDF-1.4\n% e-REDT PDF Document for ${item.caseNumber}\n1 0 obj\n<< /Title (${item.caseNumber}) >>\nendobj\ntrailer\n<< >>\n%%EOF`;
+            zipFolder.file(filename.endsWith('.pdf') ? filename : filename + '.pdf', dummyPdfContent);
+          }
+        } catch (fetchErr) {
+          zipFolder.file(filename + '.txt', `เอกสารคำร้องเลขคดี: ${item.caseNumber}\nสถานี: ${item.station}\nไฟล์: ${item.fileName}`);
+        }
+      }
+
+      // Mark all as downloaded
+      todayDocs.forEach(td => {
+        const idx = rawRequests.findIndex(r => r.caseNumber === td.caseNumber);
+        if (idx !== -1) rawRequests[idx].downloaded = true;
+      });
+      saveRequests(rawRequests);
+
+      // Generate compressed zip with DEFLATE
+      const zipBlob = await zip.generateAsync({
+        type: 'blob',
+        compression: 'DEFLATE',
+        compressionOptions: { level: 6 }
+      });
+
+      if (typeof saveAs !== 'undefined') {
+        saveAs(zipBlob, `${folderName}.zip`);
+      } else {
+        const url = URL.createObjectURL(zipBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${folderName}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+
+      Swal.fire({
+        icon: 'success',
+        title: 'บีบอัดและดาวน์โหลดเอกสารสำเร็จ',
+        html: `บีบอัดและดาวน์โหลดเอกสารประจำวันนี้จำนวน <b>${todayDocs.length}</b> ไฟล์ (รูปแบบ ZIP) เรียบร้อยแล้ว`,
+        confirmButtonText: 'ตกลง',
+        confirmButtonColor: '#1e3a8a'
+      });
+    } else {
+      // Fallback: sequential download
+      let index = 0;
+      function downloadNext() {
+        if (index >= todayDocs.length) {
+          todayDocs.forEach(td => {
+            const idx = rawRequests.findIndex(r => r.caseNumber === td.caseNumber);
+            if (idx !== -1) rawRequests[idx].downloaded = true;
+          });
+          saveRequests(rawRequests);
+          Swal.fire({
+            icon: 'success',
+            title: 'ดาวน์โหลดสำเร็จ',
+            text: `ดาวน์โหลดเรียบร้อยแล้วจำนวน ${todayDocs.length} ไฟล์`,
+            timer: 1800,
+            showConfirmButton: false
+          });
+          renderCourtRequestsTable();
+          return;
+        }
+        const c = todayDocs[index];
+        const a = document.createElement('a');
+        a.href = c.fileUrl || '#';
+        a.download = c.fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        index++;
+        setTimeout(downloadNext, 300);
+      }
+      downloadNext();
+    }
+  } catch (err) {
+    console.error('Download today docs error:', err);
+    Swal.fire({
+      icon: 'error',
+      title: 'เกิดข้อผิดพลาดในการดาวน์โหลด',
+      text: err.message || 'ไม่สามารถดาวน์โหลดไฟล์ได้'
+    });
+  }
+
+  renderCourtRequestsTable();
+}
+window.downloadTodayAllDocuments = downloadTodayAllDocuments;
+
 function openEditCapModal(caseNumber) {
   const requests = getRequests();
   const c = requests.find(r => r.caseNumber === caseNumber);
   if (!c) return;
 
-  const isOverK4 = (c.k > 4);
   let optionsHtml = '';
-  if (isOverK4) {
-    optionsHtml = `<option value="84" selected>84 วัน (ฝากขังได้สูงสุด 7 ครั้ง ครั้งละ 12 วัน)</option>`;
+  let warningHtml = '';
+  if (c.k > 4) {
+    optionsHtml = `<option value="84" selected>84 วัน (คดีอัตราโทษสูง - สูงสุด 7 ครั้ง ครั้งละ 12 วัน)</option>`;
+    warningHtml = `<p style="color: #dc2626; font-size: 0.8rem; margin-bottom: 0.5rem;"><i class="fa-solid fa-triangle-exclamation"></i> คดีดำเนินการถึงครั้งที่ ${c.k} แล้ว จึงไม่สามารถลดเพดานเป็น 48 วัน หรือ 12 วันได้</p>`;
+  } else if (c.k > 1) {
+    optionsHtml = `
+      <option value="84" ${c.cap === 84 ? 'selected' : ''}>84 วัน (คดีอัตราโทษสูง - สูงสุด 7 ครั้ง ครั้งละ 12 วัน)</option>
+      <option value="48" ${c.cap === 48 ? 'selected' : ''}>48 วัน (คดีทั่วไป - สูงสุด 4 ครั้ง ครั้งละ 12 วัน)</option>
+    `;
+    warningHtml = `<p style="color: #d97706; font-size: 0.8rem; margin-bottom: 0.5rem;"><i class="fa-solid fa-circle-info"></i> คดีดำเนินการถึงครั้งที่ ${c.k} แล้ว จึงไม่สามารถลดเพดานเป็น 12 วัน (1 ครั้ง) ได้</p>`;
   } else {
     optionsHtml = `
       <option value="84" ${c.cap === 84 ? 'selected' : ''}>84 วัน (คดีอัตราโทษสูง - สูงสุด 7 ครั้ง ครั้งละ 12 วัน)</option>
       <option value="48" ${c.cap === 48 ? 'selected' : ''}>48 วัน (คดีทั่วไป - สูงสุด 4 ครั้ง ครั้งละ 12 วัน)</option>
+      <option value="12" ${c.cap === 12 ? 'selected' : ''}>12 วัน (ฝากขังครั้งเดียว - สูงสุด 1 ครั้ง ครั้งละ 12 วัน)</option>
     `;
   }
 
@@ -2184,8 +2429,8 @@ function openEditCapModal(caseNumber) {
     title: `แก้ไขเพดานฝากขัง: ${c.caseNumber}`,
     html: `
       <div style="text-align: left; font-size: 0.9rem;">
-        <p style="margin-bottom: 0.5rem;"><b>สถานะปัจจุบัน:</b> ครั้งที่ ${c.k} | เพดานปัจจุบัน: <b>${c.cap || 84} วัน</b></p>
-        ${isOverK4 ? '<p style="color: #dc2626; font-size: 0.8rem; margin-bottom: 0.5rem;"><i class="fa-solid fa-triangle-exclamation"></i> คดีดำเนินการถึงครั้งที่ ' + c.k + ' แล้ว จึงไม่สามารถลดเพดานเป็น 48 วัน (4 ครั้ง) ได้</p>' : ''}
+        <p style="margin-bottom: 0.5rem;"><b>สถานะปัจจุบัน:</b> ครั้งที่ ${c.k} | เพดานปัจจุบัน: <b>${c.cap || 84} วัน (${c.cap === 12 ? '1' : c.cap === 48 ? '4' : '7'} ครั้ง)</b></p>
+        ${warningHtml}
         <label style="font-weight: 600; display: block; margin-top: 0.75rem; margin-bottom: 0.25rem;">เลือกเพดานฝากขังใหม่:</label>
         <select id="swalEditCapSelect" class="form-control" style="width: 100%; padding: 0.5rem; border: 1px solid #cbd5e1; border-radius: 0.4rem;">
           ${optionsHtml}
@@ -2376,15 +2621,21 @@ function openReceiveModal(caseNumber) {
   setElementText('receiveCaseNumberDisplay', `เลขคดี: ${c.caseNumber}`);
   setElementText('receiveCaseInfoDisplay', `ครั้งที่ ${c.k} | สภ.: ${c.station || 'ไม่ระบุ'}`);
 
-  // SPEC ข้อ 5.6-4: ถ้าครั้งปัจจุบัน k > 4 ตัวเลือกเพดาน 48 วันจะหายไปจากหน้าจอ
+  // SPEC: กำหนดตัวเลือกเพดานฝากขังตามครั้งที่ k ปัจจุบัน
   const capSelect = document.getElementById('receiveCapSelect');
   if (capSelect) {
     if (c.k > 4) {
       capSelect.innerHTML = `<option value="84">84 วัน (คดีอัตราโทษสูง - ฝากขังได้สูงสุด 7 ครั้ง ครั้งละ 12 วัน)</option>`;
+    } else if (c.k > 1) {
+      capSelect.innerHTML = `
+        <option value="84">84 วัน (คดีอัตราโทษสูง - ฝากขังได้สูงสุด 7 ครั้ง ครั้งละ 12 วัน)</option>
+        <option value="48">48 วัน (คดีทั่วไป - ฝากขังได้สูงสุด 4 ครั้ง ครั้งละ 12 วัน)</option>
+      `;
     } else {
       capSelect.innerHTML = `
         <option value="84">84 วัน (คดีอัตราโทษสูง - ฝากขังได้สูงสุด 7 ครั้ง ครั้งละ 12 วัน)</option>
         <option value="48">48 วัน (คดีทั่วไป - ฝากขังได้สูงสุด 4 ครั้ง ครั้งละ 12 วัน)</option>
+        <option value="12">12 วัน (ฝากขังครั้งเดียว - สูงสุด 1 ครั้ง ครั้งละ 12 วัน)</option>
       `;
     }
   }
@@ -2630,37 +2881,544 @@ function deleteHoliday(index) {
   if (currentActiveView === 'dashboard') renderDashboard();
 }
 
-function generatePoliceUsername() {
+// Global reference for last generated batch
+window.lastGeneratedPoliceBatch = null;
+
+function generatePolishUsername(existingSet = null, batchSet = null) {
   const users = getUsers();
+  const existingUsernames = existingSet || new Set(users.map(u => String(u.username || '').trim()));
+  const batchUsernames = batchSet || new Set();
+
   const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-  const specialChars = "!@#$%&";
-  let username = "";
-  let attempts = 0;
+  const specialChars = "!@#$%&*";
 
-  do {
+  // 1. Try 3 digits format first: Polish-[A-Z][000-999][Special]
+  for (let attempt = 0; attempt < 3000; attempt++) {
     const letter = letters.charAt(Math.floor(Math.random() * letters.length));
-    
-    const digits = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
-    for (let i = digits.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [digits[i], digits[j]] = [digits[j], digits[i]];
-    }
-    const threeDigits = `${digits[0]}${digits[1]}${digits[2]}`;
-
+    const digits = String(Math.floor(Math.random() * 1000)).padStart(3, '0');
     const special = specialChars.charAt(Math.floor(Math.random() * specialChars.length));
+    const username = `Polish-${letter}${digits}${special}`;
 
-    username = `Police-${letter}${threeDigits}${special}`;
-    attempts++;
-  } while (users.some(u => u.username === username) && attempts < 1000);
+    if (!existingUsernames.has(username) && !batchUsernames.has(username)) {
+      return username;
+    }
+  }
 
-  return username;
+  // 2. If 3-digit space collides, expand to 4 digits: Polish-[A-Z][0000-9999][Special]
+  for (let attempt = 0; attempt < 5000; attempt++) {
+    const letter = letters.charAt(Math.floor(Math.random() * letters.length));
+    const digits = String(Math.floor(Math.random() * 10000)).padStart(4, '0');
+    const special = specialChars.charAt(Math.floor(Math.random() * specialChars.length));
+    const username = `Polish-${letter}${digits}${special}`;
+
+    if (!existingUsernames.has(username) && !batchUsernames.has(username)) {
+      return username;
+    }
+  }
+
+  // 3. Fallback timestamp-based guarantee
+  const randNum = Math.floor(Math.random() * 9000 + 1000);
+  return `Polish-P${randNum}@`;
+}
+
+function generatePoliceUsername() {
+  return generatePolishUsername();
+}
+
+function generateSecurePolicePassword(targetLength = 8) {
+  const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ"; // exclude easily confused I, O
+  const lower = "abcdefghijkmnpqrstuvwxyz"; // exclude l, o
+  const numbers = "23456789"; // exclude 0, 1
+  const special = "!@#$%&*";
+  const allChars = upper + lower + numbers + special;
+
+  const length = Math.min(8, Math.max(6, parseInt(targetLength, 10) || 8));
+
+  // Guarantee at least 1 uppercase, 1 lowercase, 1 number, and 1 special char
+  const pwdArray = [
+    upper.charAt(Math.floor(Math.random() * upper.length)),
+    lower.charAt(Math.floor(Math.random() * lower.length)),
+    numbers.charAt(Math.floor(Math.random() * numbers.length)),
+    special.charAt(Math.floor(Math.random() * special.length))
+  ];
+
+  while (pwdArray.length < length) {
+    pwdArray.push(allChars.charAt(Math.floor(Math.random() * allChars.length)));
+  }
+
+  // Shuffle securely
+  for (let i = pwdArray.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pwdArray[i], pwdArray[j]] = [pwdArray[j], pwdArray[i]];
+  }
+
+  return pwdArray.join('');
 }
 
 function generateAndSetPoliceUsername() {
-  const newUsername = generatePoliceUsername();
+  const newUsername = generatePolishUsername();
   const input = document.getElementById('modalUsernameInput');
   if (input) input.value = newUsername;
 }
+
+function openPoliceBatchModal(event) {
+  if (event) {
+    try { event.preventDefault(); } catch (e) {}
+  }
+
+  const isCourt = currentUser && (currentUser.role === 'officer' || currentUser.role === 'admin');
+  if (!isCourt) {
+    Swal.fire({ icon: 'warning', title: 'ไม่มีสิทธิ์เข้าถึง', text: 'เฉพาะเจ้าหน้าที่ศาลและผู้ดูแลระบบเท่านั้นที่สามารถสร้างชุดบัญชีพนักงานสอบสวนได้' });
+    return;
+  }
+
+  const stationSelect = document.getElementById('batchPoliceStationSelect');
+  if (stationSelect) {
+    stationSelect.innerHTML = UDON_STATIONS.map(st => `<option value="${st}">${st}</option>`).join('');
+  }
+
+  setElementValue('batchPoliceCountInput', 10);
+  setElementValue('batchPolicePassLenSelect', 8);
+  setElementValue('batchPoliceNamePrefixInput', 'พนักงานสอบสวน');
+
+  openModal('policeBatchModal');
+}
+window.openPoliceBatchModal = openPoliceBatchModal;
+
+async function handleStartGeneratePoliceBatch(event) {
+  event.preventDefault();
+  const station = (document.getElementById('batchPoliceStationSelect')?.value || '').trim();
+  const count = parseInt(document.getElementById('batchPoliceCountInput')?.value, 10) || 10;
+  const passLen = parseInt(document.getElementById('batchPolicePassLenSelect')?.value, 10) || 8;
+  const namePrefix = (document.getElementById('batchPoliceNamePrefixInput')?.value || 'พนักงานสอบสวน').trim();
+
+  if (!station) {
+    Swal.fire({ icon: 'warning', title: 'กรุณาเลือกสถานีตำรวจ', text: 'เลือกสถานีตำรวจที่ต้องการสร้างชุดบัญชี' });
+    return;
+  }
+
+  if (count < 1 || count > 100) {
+    Swal.fire({ icon: 'warning', title: 'จำนวนไม่ถูกต้อง', text: 'กำหนดจำนวนบัญชีระหว่าง 1 ถึง 100 บัญชี' });
+    return;
+  }
+
+  closeModal('policeBatchModal');
+
+  // Open Live Progress SweetAlert
+  Swal.fire({
+    title: `<i class="fa-solid fa-users-viewfinder" style="color: var(--primary);"></i> กำลังสร้างชุดผู้ใช้งานตำรวจ`,
+    html: `
+      <div style="text-align: left; font-size: 0.9rem;">
+        <div style="font-weight: 700; color: var(--primary); margin-bottom: 0.25rem;">
+          <i class="fa-solid fa-building-shield"></i> สังกัด: <span style="color: #0f172a;">${station}</span>
+        </div>
+        <div id="swalBatchProgressLabel" style="font-size: 0.85rem; color: #475569; margin-bottom: 0.25rem;">
+          กำลังเตรียมการสุ่มบัญชี... (0 / ${count})
+        </div>
+        <div class="batch-progress-container">
+          <div id="swalBatchProgressBar" class="batch-progress-bar" style="width: 0%;"></div>
+        </div>
+        <div id="swalBatchLiveLog" class="batch-live-log">
+          <div style="color: #94a3b8; font-style: italic;">กำลังเริ่มต้นกระบวนการสุ่ม...</div>
+        </div>
+      </div>
+    `,
+    allowOutsideClick: false,
+    allowEscapeKey: false,
+    showConfirmButton: false,
+    width: '520px'
+  });
+
+  const existingUsers = getUsers();
+  const existingSet = new Set(existingUsers.map(u => String(u.username || '').trim()));
+  const batchSet = new Set();
+  const newBatchUsers = [];
+
+  const progressBar = document.getElementById('swalBatchProgressBar');
+  const progressLabel = document.getElementById('swalBatchProgressLabel');
+  const liveLog = document.getElementById('swalBatchLiveLog');
+
+  for (let i = 0; i < count; i++) {
+    const username = generatePolishUsername(existingSet, batchSet);
+    batchSet.add(username);
+
+    const password = generateSecurePolicePassword(passLen);
+    const numPill = String(i + 1).padStart(2, '0');
+    const officerName = `${namePrefix} ${station} ${numPill}`;
+
+    const userObj = {
+      username: username,
+      password: password,
+      name: officerName,
+      role: 'police',
+      station: station,
+      status: 'approved',
+      createdAt: new Date().toISOString()
+    };
+
+    newBatchUsers.push(userObj);
+
+    // Update Live Progress UI
+    const percent = Math.round(((i + 1) / count) * 100);
+    if (progressBar) progressBar.style.width = `${percent}%`;
+    if (progressLabel) progressLabel.innerHTML = `กำลังสร้างบัญชีที่ <b>${i + 1}</b> / ${count} (${percent}%)`;
+    if (liveLog) {
+      const logRow = document.createElement('div');
+      logRow.className = 'batch-log-item';
+      logRow.innerHTML = `
+        <div>
+          <span class="batch-log-badge">#${i + 1}</span>
+          <b style="color: #ffffff;">${username}</b>
+          <span style="color: #94a3b8; font-size: 0.75rem; margin-left: 0.4rem;">(${officerName})</span>
+        </div>
+        <div>
+          <span class="batch-log-pass">🔑 ${password}</span>
+        </div>
+      `;
+      if (liveLog.children.length === 1 && liveLog.children[0].style.fontStyle === 'italic') {
+        liveLog.innerHTML = '';
+      }
+      liveLog.prepend(logRow);
+    }
+
+    // Step delay for visual progress experience
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+
+  // Save to persistent storage and sync to Google Sheet
+  const updatedAllUsers = [...existingUsers, ...newBatchUsers];
+  saveUsers(updatedAllUsers);
+
+  // Store active batch in global state for exports
+  window.lastGeneratedPoliceBatch = {
+    station: station,
+    count: count,
+    createdAt: new Date().toISOString(),
+    users: newBatchUsers
+  };
+
+  await new Promise(resolve => setTimeout(resolve, 300));
+  Swal.close();
+
+  // Re-render admin user table
+  renderAdminView();
+
+  // Open result and export summary modal
+  openPoliceBatchResultModal();
+}
+window.handleStartGeneratePoliceBatch = handleStartGeneratePoliceBatch;
+
+function openPoliceBatchResultModal() {
+  const batch = window.lastGeneratedPoliceBatch;
+  if (!batch || !batch.users || batch.users.length === 0) return;
+
+  setElementText('batchResultTitle', `สร้างชุดผู้ใช้งานตำรวจสำเร็จ (${batch.users.length} บัญชี)`);
+  setElementText('batchResultSubtitle', `สังกัด: ${batch.station} · สร้างเมื่อ: ${formatThaiDate(toISO(new Date(batch.createdAt)), true)}`);
+
+  const tbody = document.getElementById('policeBatchResultTableBody');
+  if (tbody) {
+    tbody.innerHTML = '';
+    batch.users.forEach((u, idx) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td style="text-align: center; font-weight: 700; color: #64748b;">${idx + 1}</td>
+        <td><code style="background: #eff6ff; color: #1e40af; font-weight: 700; padding: 0.15rem 0.45rem; border-radius: 4px;">${u.username}</code></td>
+        <td><code style="background: #fef3c7; color: #92400e; font-weight: 700; padding: 0.15rem 0.45rem; border-radius: 4px;">${u.password}</code></td>
+        <td><b>${u.name}</b></td>
+        <td><span class="badge badge-status-uploaded">${u.station}</span></td>
+        <td style="text-align: center;">
+          <button type="button" onclick="copySingleCredential('${u.username}', '${u.password}')" class="btn-secondary" style="padding: 0.2rem 0.5rem; font-size: 0.75rem; width: auto;" title="คัดลอก Username & Password">
+            <i class="fa-solid fa-copy"></i>
+          </button>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  openModal('policeBatchResultModal');
+}
+window.openPoliceBatchResultModal = openPoliceBatchResultModal;
+
+function copySingleCredential(username, password) {
+  const text = `Username: ${username} | Password: ${password}`;
+  navigator.clipboard.writeText(text).then(() => {
+    Swal.fire({ icon: 'success', title: 'คัดลอกสำเร็จ', text: text, timer: 1200, showConfirmButton: false });
+  }).catch(() => {
+    Swal.fire({ icon: 'info', title: 'ข้อมูลบัญชี', text: text });
+  });
+}
+window.copySingleCredential = copySingleCredential;
+
+function copyPoliceBatchCredentials() {
+  const batch = window.lastGeneratedPoliceBatch;
+  if (!batch || !batch.users || batch.users.length === 0) return;
+
+  const dateStr = formatThaiDate(toISO(new Date(batch.createdAt)), true);
+  let text = `========================================\n`;
+  text += `ระบบ e-REDT ศาลจังหวัดอุดรธานี — บัญชีผู้ใช้งานตำรวจ\n`;
+  text += `สังกัด: ${batch.station}\n`;
+  text += `วันที่ออกบัญชี: ${dateStr}\n`;
+  text += `จำนวน: ${batch.users.length} บัญชี\n`;
+  text += `========================================\n\n`;
+
+  batch.users.forEach((u, i) => {
+    text += `${i + 1}. Username: ${u.username} | Password: ${u.password} | ชื่อ: ${u.name}\n`;
+  });
+
+  text += `\nลิงก์เข้าสู่ระบบ (ฝั่งสถานีตำรวจ): ${window.location.origin}${window.location.pathname.replace('/court/', '/police/')}`;
+
+  navigator.clipboard.writeText(text).then(() => {
+    Swal.fire({ icon: 'success', title: 'คัดลอกข้อมูลทั้งหมดสำเร็จ', text: `คัดลอกข้อมูล ${batch.users.length} บัญชีลงในคลิปบอร์ดแล้ว`, timer: 1500, showConfirmButton: false });
+  }).catch(() => {
+    Swal.fire({ icon: 'error', title: 'ไม่สามารถคัดลอกได้', text: 'กรุณาใช้ปุ่มส่งออก Excel หรือ PDF แทน' });
+  });
+}
+window.copyPoliceBatchCredentials = copyPoliceBatchCredentials;
+
+function exportPoliceBatchExcel() {
+  const batch = window.lastGeneratedPoliceBatch;
+  if (!batch || !batch.users || batch.users.length === 0) {
+    Swal.fire({ icon: 'warning', title: 'ไม่พบข้อมูลชุดผู้ใช้งาน', text: 'ยังไม่มีชุดข้อมูลผู้ใช้งานที่เพิ่งสร้าง' });
+    return;
+  }
+
+  const safeStation = (batch.station || 'สภ').replace(/[\/\\]/g, '_');
+  const dateISO = toISO(new Date(batch.createdAt));
+  const dateThai = formatThaiDate(dateISO, true);
+  const fileName = `รายชื่อผู้ใช้งาน_${safeStation}_${dateISO}.xlsx`;
+
+  if (typeof XLSX !== 'undefined') {
+    const wb = XLSX.utils.book_new();
+
+    const sheetData = [
+      ["ศาลจังหวัดอุดรธานี — ระบบผัดฟ้องฝากขังออนไลน์ (e-REDT)"],
+      [`บัญชีผู้ใช้งานระบบพนักงานสอบสวน — สังกัด: ${batch.station}`],
+      [`วันที่ออกเอกสาร: ${dateThai}`, `จำนวน: ${batch.users.length} บัญชี`, `ผู้ออกบัญชี: ${currentUser?.name || 'เจ้าหน้าที่ศาล'}`],
+      [], // Empty row
+      ["ลำดับ", "ชื่อผู้ใช้งาน (Username)", "รหัสผ่าน (Password)", "ชื่อแสดงในระบบ", "สังกัดสถานีตำรวจ", "สิทธิการใช้งาน (Role)", "สถานะการใช้งาน", "วันที่สร้าง"]
+    ];
+
+    batch.users.forEach((u, idx) => {
+      sheetData.push([
+        idx + 1,
+        u.username,
+        u.password,
+        u.name,
+        u.station,
+        "พนักงานสอบสวน (Police)",
+        "อนุมัติแล้ว (Approved)",
+        dateThai
+      ]);
+    });
+
+    const ws = XLSX.utils.aoa_to_sheet(sheetData);
+
+    // Set column widths
+    ws['!cols'] = [
+      { wch: 8 },  // No.
+      { wch: 22 }, // Username
+      { wch: 18 }, // Password
+      { wch: 36 }, // Name
+      { wch: 26 }, // Station
+      { wch: 24 }, // Role
+      { wch: 22 }, // Status
+      { wch: 20 }  // Date
+    ];
+
+    XLSX.utils.book_append_sheet(wb, ws, "PoliceUsers");
+    XLSX.writeFile(wb, fileName);
+
+    Swal.fire({
+      icon: 'success',
+      title: 'ส่งออก Excel สำเร็จ',
+      text: `ดาวน์โหลดไฟล์ ${fileName} เรียบร้อยแล้ว`,
+      timer: 1800,
+      showConfirmButton: false
+    });
+  } else {
+    // Fallback: UTF-8 BOM CSV
+    let csv = "\uFEFF";
+    csv += `"ศาลจังหวัดอุดรธานี — ระบบผัดฟ้องฝากขังออนไลน์ (e-REDT)"\n`;
+    csv += `"บัญชีผู้ใช้งานพนักงานสอบสวน — สังกัด: ${batch.station}"\n`;
+    csv += `"วันที่ออกเอกสาร: ${dateThai}","จำนวน: ${batch.users.length} บัญชี"\n\n`;
+    csv += `"ลำดับ","ชื่อผู้ใช้งาน (Username)","รหัสผ่าน (Password)","ชื่อแสดงในระบบ","สังกัดสถานีตำรวจ","สิทธิ (Role)","สถานะ"\n`;
+
+    batch.users.forEach((u, idx) => {
+      csv += `"${idx + 1}","${u.username}","${u.password}","${u.name}","${u.station}","ตำรวจ (พนักงานสอบสวน)","อนุมัติแล้ว"\n`;
+    });
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    if (typeof saveAs !== 'undefined') {
+      saveAs(blob, fileName.replace('.xlsx', '.csv'));
+    } else {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName.replace('.xlsx', '.csv');
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+  }
+}
+window.exportPoliceBatchExcel = exportPoliceBatchExcel;
+
+function exportPoliceBatchPDF() {
+  const batch = window.lastGeneratedPoliceBatch;
+  if (!batch || !batch.users || batch.users.length === 0) {
+    Swal.fire({ icon: 'warning', title: 'ไม่พบข้อมูลชุดผู้ใช้งาน', text: 'ยังไม่มีชุดข้อมูลผู้ใช้งานที่เพิ่งสร้าง' });
+    return;
+  }
+
+  const dateStr = formatThaiDate(toISO(new Date(batch.createdAt)), true);
+  const rowsHtml = batch.users.map((u, i) => `
+    <tr style="border-bottom: 1px solid #cbd5e1; ${i % 2 === 1 ? 'background-color: #f8fafc;' : ''}">
+      <td style="padding: 8px; text-align: center; font-weight: bold; color: #475569;">${i + 1}</td>
+      <td style="padding: 8px; font-family: 'Consolas', monospace; font-weight: bold; color: #1e3a8a; font-size: 14px;">${u.username}</td>
+      <td style="padding: 8px; font-family: 'Consolas', monospace; font-weight: bold; color: #b45309; font-size: 14px;">${u.password}</td>
+      <td style="padding: 8px; font-weight: 500;">${u.name}</td>
+      <td style="padding: 8px; color: #047857; font-weight: 600;">${u.station}</td>
+      <td style="padding: 8px; text-align: center; color: #1e40af;">เจ้าพนักงานตำรวจ</td>
+    </tr>
+  `).join('');
+
+  const printWindow = window.open('', '_blank');
+  printWindow.document.write(`
+    <!DOCTYPE html>
+    <html lang="th">
+    <head>
+      <meta charset="UTF-8">
+      <title>บัญชีผู้ใช้งานระบบ e-REDT — สังกัด ${batch.station}</title>
+      <link rel="preconnect" href="https://fonts.googleapis.com">
+      <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+      <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+      <style>
+        body {
+          font-family: 'Sarabun', 'Prompt', sans-serif;
+          margin: 20px;
+          color: #0f172a;
+          line-height: 1.5;
+        }
+        .header {
+          text-align: center;
+          border-bottom: 2px solid #1e3a8a;
+          padding-bottom: 15px;
+          margin-bottom: 20px;
+        }
+        .logo-title {
+          font-size: 20px;
+          font-weight: 700;
+          color: #1e3a8a;
+          margin-bottom: 4px;
+        }
+        .doc-title {
+          font-size: 16px;
+          font-weight: 600;
+          color: #334155;
+        }
+        .meta-box {
+          display: flex;
+          justify-content: space-between;
+          background: #f1f5f9;
+          padding: 10px 15px;
+          border-radius: 6px;
+          margin-bottom: 20px;
+          font-size: 13px;
+        }
+        table {
+          width: 100%;
+          border-collapse: collapse;
+          font-size: 13px;
+        }
+        th {
+          background-color: #1e3a8a;
+          color: #ffffff;
+          padding: 10px 8px;
+          text-align: left;
+          font-weight: 600;
+        }
+        .security-box {
+          margin-top: 25px;
+          padding: 12px 15px;
+          border: 1px dashed #d97706;
+          background: #fffbeb;
+          border-radius: 6px;
+          font-size: 12px;
+          color: #92400e;
+        }
+        .footer {
+          margin-top: 30px;
+          text-align: right;
+          font-size: 13px;
+        }
+        @media print {
+          body { margin: 0; }
+          .no-print { display: none; }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <div class="logo-title">ศาลจังหวัดอุดรธานี — ระบบผัดฟ้องฝากขังออนไลน์ (e-REDT)</div>
+        <div class="doc-title">เอกสารข้อมูลบัญชีผู้ใช้งานระบบ (พนักงานสอบสวน) — สังกัด ${batch.station}</div>
+      </div>
+
+      <div class="meta-box">
+        <div><b>สังกัดสถานีตำรวจ:</b> ${batch.station}</div>
+        <div><b>จำนวนบัญชีทั้งหมด:</b> ${batch.users.length} บัญชี</div>
+        <div><b>วันที่ออกเอกสาร:</b> ${dateStr}</div>
+        <div><b>ผู้ออกบัญชี:</b> ${currentUser?.name || 'เจ้าหน้าที่ศาล'}</div>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 40px; text-align: center;">ลำดับ</th>
+            <th>ชื่อผู้ใช้งาน (Username)</th>
+            <th>รหัสผ่าน (Password)</th>
+            <th>ชื่อแสดงในระบบ</th>
+            <th>สังกัด</th>
+            <th style="text-align: center;">สิทธิการใช้งาน</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rowsHtml}
+        </tbody>
+      </table>
+
+      <div class="security-box">
+        <b>⚠️ คำแนะนำและมาตรการรักษาความปลอดภัย:</b><br>
+        1. เอกสารนี้เป็นข้อมูลลับเฉพาะสำหรับพนักงานสอบสวนเจ้าของสำนวน สังกัด <b>${batch.station}</b><br>
+        2. พนักงานสอบสวนสามารถเข้าสู่ระบบ e-REDT ได้ที่หน้าเว็บระบบฝั่งตำรวจ โดยใช้ Username และ Password ข้างต้นในการเข้าใช้งาน<br>
+        3. โปรดเก็บรักษาชื่อผู้ใช้และรหัสผ่านไว้เป็นความลับ และไม่อนุญาตให้ผู้อื่นนำไปใช้งานแทน
+      </div>
+
+      <div class="footer">
+        <p>เจ้าหน้าที่ผู้ดูแลระบบ / ศาลจังหวัดอุดรธานี</p>
+        <p style="font-size: 11px; color: #64748b;">พิมพ์เมื่อ: ${new Date().toLocaleString('th-TH')}</p>
+      </div>
+
+      <div class="no-print" style="margin-top: 20px; text-align: center;">
+        <button onclick="window.print();" style="padding: 10px 24px; font-size: 16px; background: #1e3a8a; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">
+          พิมพ์ / บันทึกเป็น PDF
+        </button>
+      </div>
+
+      <script>
+        window.onload = function() {
+          setTimeout(function() {
+            window.print();
+          }, 400);
+        };
+      </script>
+    </body>
+    </html>
+  `);
+  printWindow.document.close();
+}
+window.exportPoliceBatchPDF = exportPoliceBatchPDF;
 
 function openUserModal() {
   setElementText('userModalTitle', 'เพิ่มผู้ใช้งานใหม่');
@@ -3631,7 +4389,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 
-function downloadStationBatch(dateStr, stationName) {
+async function downloadStationBatch(dateStr, stationName) {
   const requests = getRequests();
   const holidays = getHolidays();
   const enriched = requests.map(r => enrichCase(r, holidays));
@@ -3652,13 +4410,110 @@ function downloadStationBatch(dateStr, stationName) {
     return;
   }
 
+  // Exactly 1 file -> Direct download
+  if (targetCases.length === 1) {
+    const singleCase = targetCases[0];
+    const reqIndex = requests.findIndex(r => r.caseNumber === singleCase.caseNumber);
+    if (reqIndex !== -1) {
+      requests[reqIndex].downloaded = true;
+      saveRequests(requests);
+    }
+
+    if (singleCase.fileUrl) {
+      const a = document.createElement('a');
+      a.href = singleCase.fileUrl;
+      a.download = singleCase.fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } else {
+      Swal.fire({ icon: 'info', title: 'ดาวน์โหลดไฟล์สำเร็จ', text: `ศาลเปิดดาวน์โหลดไฟล์ ${singleCase.fileName} เรียบร้อยแล้ว` });
+    }
+
+    if (typeof currentActiveView !== 'undefined' && currentActiveView === 'dashboard') renderDashboard();
+    else renderCourtView();
+    return;
+  }
+
+  // > 1 files -> Compress into ZIP
   Swal.fire({
-    title: 'กำลังดาวน์โหลดไฟล์...',
-    text: `กำลังดาวน์โหลด ${targetCases.length} ไฟล์ของ ${stationName}...`,
+    title: 'กำลังบีบอัดและดาวน์โหลดไฟล์...',
+    html: `กำลังบีบอัด ${targetCases.length} ไฟล์ของ ${stationName}...`,
     allowOutsideClick: false,
     didOpen: () => { Swal.showLoading(); }
   });
 
+  try {
+    if (typeof JSZip !== 'undefined') {
+      const zip = new JSZip();
+      const folderName = `คำร้อง_${stationName.replace(/[\/\\]/g, '_')}_${dateStr}`;
+      const zipFolder = zip.folder(folderName);
+
+      for (let i = 0; i < targetCases.length; i++) {
+        const item = targetCases[i];
+        const safeCaseNum = (item.caseNumber || 'case').replace(/[\/\\]/g, '_');
+        const filename = `${safeCaseNum}_${item.fileName}`;
+        
+        try {
+          if (item.fileUrl) {
+            const resp = await fetch(item.fileUrl);
+            if (resp.ok) {
+              const blob = await resp.blob();
+              zipFolder.file(filename, blob);
+            } else {
+              zipFolder.file(filename + '.txt', `เอกสารคำร้อง: ${item.caseNumber}\nURL: ${item.fileUrl}`);
+            }
+          } else {
+            const dummyPdfContent = `%PDF-1.4\n% e-REDT PDF Document for ${item.caseNumber}\n1 0 obj\n<< /Title (${item.caseNumber}) >>\nendobj\ntrailer\n<< >>\n%%EOF`;
+            zipFolder.file(filename.endsWith('.pdf') ? filename : filename + '.pdf', dummyPdfContent);
+          }
+        } catch (fetchErr) {
+          zipFolder.file(filename + '.txt', `เอกสารคำร้อง: ${item.caseNumber}\nไฟล์: ${item.fileName}`);
+        }
+      }
+
+      targetCases.forEach(tc => {
+        const idx = requests.findIndex(r => r.caseNumber === tc.caseNumber);
+        if (idx !== -1) requests[idx].downloaded = true;
+      });
+      saveRequests(requests);
+
+      const zipBlob = await zip.generateAsync({
+        type: 'blob',
+        compression: 'DEFLATE',
+        compressionOptions: { level: 6 }
+      });
+
+      if (typeof saveAs !== 'undefined') {
+        saveAs(zipBlob, `${folderName}.zip`);
+      } else {
+        const url = URL.createObjectURL(zipBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${folderName}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+
+      Swal.fire({
+        icon: 'success',
+        title: 'บีบอัดและดาวน์โหลดสำเร็จ',
+        html: `บีบอัดไฟล์ของ ${stationName} จำนวน <b>${targetCases.length}</b> ไฟล์ (รูปแบบ ZIP) เรียบร้อยแล้ว`,
+        timer: 1800,
+        showConfirmButton: false
+      });
+
+      if (typeof currentActiveView !== 'undefined' && currentActiveView === 'dashboard') renderDashboard();
+      else renderCourtView();
+      return;
+    }
+  } catch (e) {
+    console.error('Error in batch zip download:', e);
+  }
+
+  // Fallback sequential download
   let index = 0;
   function downloadNext() {
     if (index >= targetCases.length) {
@@ -3750,3 +4605,17 @@ function handleCreateFirstCourtAccount(event) {
     location.reload();
   });
 }
+
+// Window resize handler to seamlessly adapt DataTables / Mobile Card views across 768px breakpoint
+let eredtResizeTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(eredtResizeTimer);
+  eredtResizeTimer = setTimeout(() => {
+    if (typeof currentActiveView !== 'undefined' && currentActiveView === 'requests') {
+      if (typeof currentUser !== 'undefined' && currentUser && currentUser.role !== 'police') {
+        renderCourtRequestsTable();
+      }
+    }
+  }, 250);
+});
+

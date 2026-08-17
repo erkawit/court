@@ -1426,3 +1426,247 @@ table.data-table tr:hover td {
   color: #1d4ed8;
   border: 1px solid #bfdbfe;
 }
+
+/* ==========================================================================
+   DataTables System UX/UI Theme (For screens >= 768px)
+   ========================================================================== */
+
+.dataTables_wrapper {
+  position: relative;
+  clear: both;
+  font-family: 'Sarabun', 'Prompt', sans-serif;
+  color: var(--text-main);
+  padding-top: 0.5rem;
+}
+
+.dataTables_wrapper .dataTables_length,
+.dataTables_wrapper .dataTables_filter,
+.dataTables_wrapper .dataTables_info,
+.dataTables_wrapper .dataTables_paginate {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.dataTables_wrapper .dataTables_length {
+  float: left;
+  margin-bottom: 0.75rem;
+}
+
+.dataTables_wrapper .dataTables_length select {
+  padding: 0.35rem 1.8rem 0.35rem 0.6rem;
+  border: 1px solid var(--card-border);
+  border-radius: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--text-main);
+  background-color: #ffffff;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+}
+
+.dataTables_wrapper .dataTables_length select:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(30, 58, 138, 0.15);
+}
+
+.dataTables_wrapper .dataTables_filter {
+  float: right;
+  margin-bottom: 0.75rem;
+}
+
+.dataTables_wrapper .dataTables_filter input {
+  padding: 0.4rem 0.75rem;
+  border: 1px solid var(--card-border);
+  border-radius: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--text-main);
+  outline: none;
+  margin-left: 0.4rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.dataTables_wrapper .dataTables_filter input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(30, 58, 138, 0.15);
+}
+
+.dataTables_wrapper .dataTables_info {
+  float: left;
+  padding-top: 0.85rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.dataTables_wrapper .dataTables_paginate {
+  float: right;
+  text-align: right;
+  padding-top: 0.65rem;
+}
+
+.dataTables_wrapper .dataTables_paginate .paginate_button {
+  display: inline-block;
+  min-width: 2rem;
+  padding: 0.35rem 0.7rem;
+  margin-left: 0.25rem;
+  text-align: center;
+  text-decoration: none !important;
+  cursor: pointer;
+  color: var(--text-main) !important;
+  border: 1px solid var(--card-border);
+  border-radius: 0.375rem;
+  background: #ffffff;
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: all 0.15s ease;
+}
+
+.dataTables_wrapper .dataTables_paginate .paginate_button:hover {
+  background: #f1f5f9 !important;
+  color: var(--primary) !important;
+  border-color: #cbd5e1 !important;
+}
+
+.dataTables_wrapper .dataTables_paginate .paginate_button.current,
+.dataTables_wrapper .dataTables_paginate .paginate_button.current:hover {
+  background: var(--primary) !important;
+  color: #ffffff !important;
+  border-color: var(--primary) !important;
+  font-weight: 700;
+  box-shadow: 0 2px 4px rgba(30, 58, 138, 0.2);
+}
+
+.dataTables_wrapper .dataTables_paginate .paginate_button.disabled,
+.dataTables_wrapper .dataTables_paginate .paginate_button.disabled:hover {
+  color: #94a3b8 !important;
+  background: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* Sorting Indicators */
+table.dataTable thead th.sorting,
+table.dataTable thead th.sorting_asc,
+table.dataTable thead th.sorting_desc {
+  cursor: pointer;
+  position: relative;
+  padding-right: 1.5rem !important;
+}
+
+table.dataTable thead th.sorting::after {
+  content: " \f0dc";
+  font-family: "Font Awesome 6 Free";
+  font-weight: 900;
+  opacity: 0.35;
+  font-size: 0.75rem;
+  position: absolute;
+  right: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+table.dataTable thead th.sorting_asc::after {
+  content: " \f0de";
+  font-family: "Font Awesome 6 Free";
+  font-weight: 900;
+  opacity: 0.9;
+  color: var(--accent-gold);
+  font-size: 0.75rem;
+  position: absolute;
+  right: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+table.dataTable thead th.sorting_desc::after {
+  content: " \f0dd";
+  font-family: "Font Awesome 6 Free";
+  font-weight: 900;
+  opacity: 0.9;
+  color: var(--accent-gold);
+  font-size: 0.75rem;
+  position: absolute;
+  right: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+/* Hide DataTables controls on mobile */
+@media (max-width: 767px) {
+  .dataTables_wrapper .dataTables_length,
+  .dataTables_wrapper .dataTables_filter,
+  .dataTables_wrapper .dataTables_info,
+  .dataTables_wrapper .dataTables_paginate {
+    display: none !important;
+  }
+}
+
+/* ==========================================================================
+   Batch User Generator Progress & Live Log Styles
+   ========================================================================== */
+
+.batch-progress-container {
+  background: #e2e8f0;
+  border-radius: 9999px;
+  overflow: hidden;
+  height: 14px;
+  margin: 1.25rem 0 0.65rem 0;
+  position: relative;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.batch-progress-bar {
+  background: linear-gradient(90deg, #1e3a8a, #2563eb, #059669);
+  height: 100%;
+  width: 0%;
+  border-radius: 9999px;
+  transition: width 0.15s ease-in-out;
+  box-shadow: 0 1px 4px rgba(37, 99, 235, 0.4);
+}
+
+.batch-live-log {
+  max-height: 180px;
+  overflow-y: auto;
+  background: #0f172a;
+  color: #38bdf8;
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 0.825rem;
+  padding: 0.85rem 1rem;
+  border-radius: 0.5rem;
+  margin-top: 1rem;
+  text-align: left;
+  line-height: 1.6;
+  border: 1px solid #1e293b;
+}
+
+.batch-log-item {
+  display: flex;
+  justify-content: space-between;
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.12);
+  padding: 0.3rem 0;
+  align-items: center;
+}
+
+.batch-log-item:last-child {
+  border-bottom: none;
+}
+
+.batch-log-badge {
+  background: #1e3a8a;
+  color: #93c5fd;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  margin-right: 0.4rem;
+}
+
+.batch-log-pass {
+  color: #fbbf24;
+  font-weight: 600;
+  background: rgba(251, 191, 36, 0.1);
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+}
+
+
