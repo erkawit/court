@@ -531,6 +531,15 @@
           </select>
         </div>
 
+        <div class="form-group">
+          <label for="batchCapSelect"><i class="fa-solid fa-chart-line"></i> กำหนดเพดานฝากขังเริ่มต้น (ขั้นต่ำ 12 วัน)</label>
+          <select id="batchCapSelect" class="form-control">
+            <option value="84">84 วัน (คดีอัตราโทษสูง - ฝากขังได้สูงสุด 7 ครั้ง ครั้งละ 12 วัน)</option>
+            <option value="48">48 วัน (คดีทั่วไป - ฝากขังได้สูงสุด 4 ครั้ง ครั้งละ 12 วัน)</option>
+            <option value="12">12 วัน (ฝากขังครั้งเดียว - สูงสุด 1 ครั้ง ครั้งละ 12 วัน)</option>
+          </select>
+        </div>
+
         <div style="display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.5rem;">
           <button type="button" onclick="closeModal('createBatchModal')" class="btn-secondary">ยกเลิก</button>
           <button type="submit" class="btn-primary" style="width: auto;">
@@ -1195,7 +1204,7 @@
  * ศาลจังหวัดอุดรธานี — ระบบติดตามคำร้องขอฝากขังออนไลน์
  */
 
-const SPREADSHEET_ID = '1Y-OA9B8cPRwTcILCB9lmLny2GrfcEnNqR5i07lTGDM4';
+const SPREADSHEET_ID = '1yoznW_FWEf5BLKOdqn110oTZj5zJg4KbsKsogoh-6g4';
 const DEFAULT_DRIVE_FOLDER_ID = '1l5ZDlXI14lgFc6WGqmZ3kQ9qB-ci-ArM';
 
 function doGet(e) {
@@ -1556,6 +1565,6 @@ function responseJSON(data) {
   </div>
 
   <!-- System JavaScript -->
-  <script src="app.js"></script>
+  <script src="app.js?v=2.0.3"></script>
 </body>
 </html>
