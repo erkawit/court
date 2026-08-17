@@ -2736,31 +2736,130 @@ function openCreateBatchModal(event) {
   openModal('createBatchModal');
 }
 
+/**
+ * แยกส่วนประกอบของเลขฝากขัง (เช่น "ฝ.12/2569", "ยฝ.1/2569", "ฝ.12")
+ */
+function parseCaseComponents(caseStr) {
+  if (!caseStr) return null;
+  const cleaned = String(caseStr).trim();
+  const match = cleaned.match(/^([^\d]+)\s*(\d+)(?:\s*\/\s*(\d+))?$/);
+  if (match) {
+    let type = match[1].trim();
+    if (type === 'ฝ' || type === 'ฝ.') type = 'ฝ.';
+    else if (type === 'ยฝ' || type === 'ยฝ.') type = 'ยฝ.';
+    
+    const num = parseInt(match[2], 10);
+    const year = match[3] ? match[3].trim() : '';
+    return { type, num, year, raw: cleaned };
+  }
+  return { type: '', num: NaN, year: '', raw: cleaned };
+}
+window.parseCaseComponents = parseCaseComponents;
+
+/**
+ * ตรวจสอบความซ้ำซ้อนของเลขฝากขังก่อนนำเข้าข้อมูล:
+ * 1. หากประเภท (ตัวอักษรนำหน้า) ไม่เหมือนกัน สามารถใช้เลขรันซ้ำกันได้ แต่ต้องตรวจสอบปี พ.ศ. หากปี พ.ศ. ไม่ตรงกันสามารถใช้ตัวเลขรันซ้ำกันได้
+ * 2. หากประเภทเหมือนกัน ให้ดูที่ปี พ.ศ. หากปี พ.ศ. ไม่ตรงกันสามารถใช้เลขรันซ้ำกันได้
+ * 3. หากประเภทเหมือนกัน + ปี พ.ศ. เดียวกัน + เลขที่เดียวกัน -> ถือว่า "ซ้ำ" ห้ามนำเข้าข้อมูล
+ */
+function checkCaseDuplicate(newType, newNum, newYear, existingCases) {
+  let normType = newType;
+  if (normType === 'ฝ' || normType === 'ฝ.') normType = 'ฝ.';
+  else if (normType === 'ยฝ' || normType === 'ยฝ.') normType = 'ยฝ.';
+  
+  const normYear = String(newYear).trim();
+  const targetCaseNo = `${normType}${newNum}/${normYear}`;
+
+  for (const c of existingCases) {
+    if (!c || !c.caseNumber) continue;
+    
+    const existingStr = String(c.caseNumber).trim();
+    if (existingStr === targetCaseNo) {
+      return { isDuplicate: true, duplicateCase: c, matchedCaseNo: targetCaseNo };
+    }
+
+    const parsed = parseCaseComponents(existingStr);
+    if (parsed && parsed.num === newNum) {
+      const typeMatches = (parsed.type === normType) || (c.type && (c.type === normType || `${c.type}.` === normType));
+      const yearMatches = (!parsed.year || !normYear) ? true : (parsed.year === normYear);
+      
+      // ซ้ำเมื่อทั้งประเภทและปี พ.ศ. ตรงกัน
+      if (typeMatches && yearMatches) {
+        return { isDuplicate: true, duplicateCase: c, matchedCaseNo: existingStr };
+      }
+    }
+  }
+
+  return { isDuplicate: false };
+}
+window.checkCaseDuplicate = checkCaseDuplicate;
+
 function handleCreateBatch(event) {
   event.preventDefault();
-  const type = document.getElementById('batchTypeSelect').value;
-  const year = document.getElementById('batchYearInput').value.trim();
-  const startNum = parseInt(document.getElementById('batchStartNumInput').value, 10);
-  const endNum = parseInt(document.getElementById('batchEndNumInput').value, 10);
-  const startDateRaw = document.getElementById('batchStartDateInput').value;
+  const form = event.target;
+  
+  const typeEl = form.querySelector('[id="batchTypeSelect"]') || document.getElementById('batchTypeSelect');
+  const yearEl = form.querySelector('[id="batchYearInput"]') || document.getElementById('batchYearInput');
+  const startNumEl = form.querySelector('[id="batchStartNumInput"]') || document.getElementById('batchStartNumInput');
+  const endNumEl = form.querySelector('[id="batchEndNumInput"]') || document.getElementById('batchEndNumInput');
+  const startDateEl = form.querySelector('[id="batchStartDateInput"]') || document.getElementById('batchStartDateInput');
+  const stationEl = form.querySelector('[id="batchStationSelect"]') || document.getElementById('batchStationSelect');
+  const capEl = form.querySelector('[id="batchCapSelect"]') || document.getElementById('batchCapSelect');
+
+  const type = typeEl ? typeEl.value : 'ฝ.';
+  const year = yearEl ? yearEl.value.trim() : (new Date().getFullYear() + 543).toString();
+  const startNum = parseInt(startNumEl ? startNumEl.value : '1', 10);
+  const endNum = parseInt(endNumEl ? endNumEl.value : '1', 10);
+  const startDateRaw = startDateEl ? startDateEl.value : '';
   const startDate = toISO(startDateRaw);
-  const station = document.getElementById('batchStationSelect').value;
-  const capVal = parseInt(document.getElementById('batchCapSelect')?.value || '84', 10);
+  const station = (stationEl ? stationEl.value : '').trim();
+  const capVal = parseInt(capEl ? capEl.value : '84', 10);
+
+  if (isNaN(startNum) || isNaN(endNum) || startNum <= 0 || endNum <= 0) {
+    Swal.fire({ icon: 'error', title: 'ข้อมูลไม่ถูกต้อง', text: 'กรุณากรอกเลขเริ่มต้นและเลขสิ้นสุดเป็นตัวเลขจำนวนเต็มบวก' });
+    return;
+  }
 
   if (startNum > endNum) {
     Swal.fire({ icon: 'error', title: 'ข้อมูลไม่ถูกต้อง', text: 'เลขเริ่มต้นต้องไม่มากกว่าเลขสิ้นสุด' });
     return;
   }
 
-  const requests = getRequests();
+  if (!year) {
+    Swal.fire({ icon: 'error', title: 'ข้อมูลไม่ครบถ้วน', text: 'กรุณาระบุปี พ.ศ.' });
+    return;
+  }
 
-  // Check duplicates
+  const requests = getRequests();
+  const duplicates = [];
+
+  // ตรวจสอบความซ้ำซ้อนของเลขฝากขังก่อนนำเข้าข้อมูลทุกคดี
   for (let i = startNum; i <= endNum; i++) {
-    const caseNo = `${type}${i}/${year}`;
-    if (requests.some(r => r.caseNumber === caseNo)) {
-      Swal.fire({ icon: 'error', title: 'เลขฝากขังซ้ำซ้อน', text: `เลขฝากขัง ${caseNo} มีอยู่ในระบบอยู่แล้ว` });
-      return;
+    const dupCheck = checkCaseDuplicate(type, i, year, requests);
+    if (dupCheck.isDuplicate) {
+      duplicates.push(dupCheck.matchedCaseNo || `${type}${i}/${year}`);
     }
+  }
+
+  if (duplicates.length > 0) {
+    const previewDups = duplicates.slice(0, 8).join(', ') + (duplicates.length > 8 ? ` และอีก ${duplicates.length - 8} รายการ` : '');
+    Swal.fire({
+      icon: 'error',
+      title: 'พบเลขฝากขังซ้ำซ้อนในระบบ',
+      html: `
+        <div style="text-align: left; font-size: 0.9rem; line-height: 1.6; color: #334155;">
+          <p><b>ระบบไม่อนุญาตให้นำเข้าข้อมูลเนื่องจากตรวจพบเลขฝากขังซ้ำ:</b></p>
+          <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 0.5rem; padding: 0.75rem; color: #991b1b; font-weight: 600; margin: 0.5rem 0;">
+            ${previewDups}
+          </div>
+          <p style="font-size: 0.8rem; color: #64748b; margin-top: 0.5rem;">
+            * กฎการตรวจสอบ: หากประเภทและปี พ.ศ. ตรงกัน จะไม่สามารถใช้เลขที่ซ้ำกันได้ (ยกเว้นคนละประเภท หรือคนละปี พ.ศ.)
+          </p>
+        </div>
+      `,
+      confirmButtonText: 'ตกลง'
+    });
+    return;
   }
 
   // Create batch cases
@@ -2774,12 +2873,13 @@ function handleCreateBatch(event) {
       k: 2, // Starts from 2nd remand tracking
       cap: capVal, // Selected cap (12, 48, 84 days)
       cumulativeDays: 12, // First remand used 12 days
-      station: station,
+      station: station || null,
       officer: null,
       fileName: null,
       downloaded: false,
       closed: false,
-      history: []
+      history: [],
+      createdAt: new Date().toISOString()
     });
   }
 
@@ -2789,7 +2889,7 @@ function handleCreateBatch(event) {
   Swal.fire({
     icon: 'success',
     title: 'สร้างชุดเลขคำร้องสำเร็จ',
-    text: `สร้างชุดเลข ${type}${startNum} ถึง ${type}${endNum}/${year} รวม ${newCases.length} คดี และส่งเข้ากล่องจดหมาย ${station} เรียบร้อยแล้ว`
+    text: `สร้างชุดเลข ${type}${startNum} ถึง ${type}${endNum}/${year} รวม ${newCases.length} คดี เรียบร้อยแล้ว` + (station ? ` และส่งเข้ากล่องจดหมาย ${station}` : '')
   });
 
   if (currentActiveView === 'dashboard') renderDashboard();
