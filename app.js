@@ -622,13 +622,53 @@ function saveUsers(users) {
   broadcastRealtimeUpdate('USERS_UPDATED');
 }
 
+function deduplicateRequests(reqs) {
+  if (!Array.isArray(reqs)) return [];
+  const map = new Map();
+  reqs.forEach(r => {
+    if (!r || !r.caseNumber) return;
+    const key = String(r.caseNumber).trim();
+    if (!key) return;
+    
+    if (!map.has(key)) {
+      map.set(key, { ...r, caseNumber: key });
+    } else {
+      // Merge properties: prioritize record with station, officer, fileName, occasions or updated history
+      const existing = map.get(key);
+      const merged = { ...existing };
+      
+      if (!merged.station && r.station) merged.station = r.station;
+      if (!merged.officer && r.officer) merged.officer = r.officer;
+      if (!merged.fileName && r.fileName) {
+        merged.fileName = r.fileName;
+        merged.fileUrl = r.fileUrl;
+      }
+      if (r.downloaded) merged.downloaded = true;
+      if (r.closed) {
+        merged.closed = true;
+        merged.closedDate = r.closedDate || merged.closedDate;
+      }
+      if (Array.isArray(r.occasions) && r.occasions.length > (merged.occasions?.length || 0)) {
+        merged.occasions = r.occasions;
+      }
+      if (Array.isArray(r.history) && r.history.length > (merged.history?.length || 0)) {
+        merged.history = r.history;
+      }
+      map.set(key, merged);
+    }
+  });
+  return Array.from(map.values());
+}
+window.deduplicateRequests = deduplicateRequests;
+
 function getRequests() {
   if (inMemoryRequests && Array.isArray(inMemoryRequests)) {
     return inMemoryRequests;
   }
-  const reqs = JSON.parse(localStorage.getItem('eredt_requests') || '[]');
+  const rawReqs = JSON.parse(localStorage.getItem('eredt_requests') || '[]');
+  const reqs = deduplicateRequests(rawReqs);
   // Sanitize existing cases if any contain invalid date strings
-  let modified = false;
+  let modified = (rawReqs.length !== reqs.length);
   reqs.forEach(r => {
     if (!r.startDate || r.startDate.includes('NaN')) {
       r.startDate = toISO(new Date());
@@ -643,7 +683,7 @@ function getRequests() {
 }
 
 function saveRequests(requests) {
-  inMemoryRequests = requests || [];
+  inMemoryRequests = deduplicateRequests(requests || []);
   localStorage.setItem('eredt_requests', JSON.stringify(inMemoryRequests));
   if (inMemoryRequests && inMemoryRequests.length > 0) {
     syncToGoogleSheet('saveRequests', { requests: inMemoryRequests });
@@ -1036,6 +1076,8 @@ async function handleLogin(event) {
     });
 
     renderAppLayout();
+    // Fetch and check latest live data from Google Sheet upon login
+    fetchLiveGoogleSheetData({ isSilent: true });
   } else {
     Swal.fire({
       icon: 'error',
@@ -1142,7 +1184,7 @@ function renderAppLayout() {
 
   // Setup Sidebar Menus based on Role
   setElementDisplay('navCategoryCourt', isCourt ? 'block' : 'none');
-  setElementDisplay('navItemCreateBatch', 'none');
+  setElementDisplay('navItemCreateBatch', isCourt ? 'block' : 'none');
   setElementDisplay('navItemHolidays', isCourt ? 'block' : 'none');
 
   setElementDisplay('navCategoryPolice', isPolice ? 'block' : 'none');
@@ -1153,11 +1195,13 @@ function renderAppLayout() {
   setElementDisplay('navCategoryAdmin', isAdmin ? 'block' : 'none');
   setElementDisplay('navItemUsers', isAdmin ? 'block' : 'none');
   setElementDisplay('navItemGoogleSettings', isAdmin ? 'block' : 'none');
+  setElementDisplay('navItemConfigGuide', isAdmin ? 'block' : 'none');
 
   // Setup Mobile Bottom Nav items based on Role
   setElementDisplay('mbNavQuickUpload', isPolice ? 'flex' : 'none');
   setElementDisplay('mbNavInbox', isPolice ? 'flex' : 'none');
   setElementDisplay('mbNavCreateBatch', isCourt ? 'flex' : 'none');
+  setElementDisplay('mbNavHolidays', isCourt ? 'flex' : 'none');
   setElementDisplay('mbNavAdmin', isAdmin ? 'flex' : 'none');
 
   // Sync Button visible for all court officers
@@ -1170,7 +1214,7 @@ function renderAppLayout() {
   }
   let savedView = hashView || sessionStorage.getItem('eredt_last_view') || 'dashboard';
   
-  if (savedView === 'admin' && !isAdmin) {
+  if ((savedView === 'admin' || savedView === 'google_settings' || savedView === 'config_guide') && !isAdmin) {
     savedView = 'dashboard';
   }
   
@@ -1193,8 +1237,8 @@ function switchView(viewName, event, subTab) {
     Swal.close();
   }
 
-  // ป้องกันการเข้าถึงหน้า admin หากไม่ใช่ผู้ดูแลระบบ
-  if (viewName === 'admin' && (!currentUser || currentUser.role !== 'admin')) {
+  // ป้องกันการเข้าถึงหน้า admin, google_settings หรือ config_guide หากไม่ใช่ผู้ดูแลระบบ
+  if ((viewName === 'admin' || viewName === 'google_settings' || viewName === 'config_guide') && (!currentUser || currentUser.role !== 'admin')) {
     Swal.fire({
       icon: 'warning',
       title: 'ไม่มีสิทธิ์เข้าถึง',
@@ -1217,8 +1261,12 @@ function switchView(viewName, event, subTab) {
   }
 
   setElementDisplay('dashboardView', 'none');
+  setElementDisplay('createBatchView', 'none');
   setElementDisplay('requestsView', 'none');
   setElementDisplay('adminView', 'none');
+  setElementDisplay('holidaysView', 'none');
+  setElementDisplay('googleSettingsView', 'none');
+  setElementDisplay('configGuideView', 'none');
 
   // Reset ALL sidebar navigation items
   document.querySelectorAll('.sidebar-item').forEach(el => {
@@ -1235,6 +1283,17 @@ function switchView(viewName, event, subTab) {
     setElementClass('navItemDashboard', 'active', true);
     setElementClass('mbNavDashboard', 'active', true);
     renderDashboard();
+  } else if (viewName === 'create_batch') {
+    const isCourt = currentUser && (currentUser.role === 'officer' || currentUser.role === 'admin');
+    if (!isCourt) {
+      switchView('dashboard');
+      return;
+    }
+    setElementDisplay('createBatchView', 'block');
+    setElementClass('navItemCreateBatch', 'active', true);
+    setElementClass('navItemCreateBatchLink', 'active', true);
+    setElementClass('mbNavCreateBatch', 'active', true);
+    renderCreateBatchView();
   } else if (viewName === 'requests') {
     setElementDisplay('requestsView', 'block');
 
@@ -1302,11 +1361,42 @@ function switchView(viewName, event, subTab) {
       setElementDisplay('courtRequestsSection', 'block');
       setElementClass('navItemRequests', 'active', true);
       setElementClass('mbNavRequests', 'active', true);
-      renderCourtView();
+      renderCourtRequestsTable();
     }
-  } else if (viewName === 'admin') {
+  } else if (viewName === 'holidays') {
     const isCourt = currentUser && (currentUser.role === 'officer' || currentUser.role === 'admin');
     if (!isCourt) {
+      switchView('dashboard');
+      return;
+    }
+    setElementDisplay('holidaysView', 'block');
+    setElementClass('navItemHolidays', 'active', true);
+    setElementClass('navItemHolidaysLink', 'active', true);
+    setElementClass('mbNavHolidays', 'active', true);
+    renderHolidaysPage();
+  } else if (viewName === 'google_settings') {
+    const isAdminUser = currentUser && currentUser.role === 'admin';
+    if (!isAdminUser) {
+      switchView('dashboard');
+      return;
+    }
+    setElementDisplay('googleSettingsView', 'block');
+    setElementClass('navItemGoogleSettings', 'active', true);
+    setElementClass('navItemGoogleSettingsLink', 'active', true);
+    renderGoogleSettingsPage();
+  } else if (viewName === 'config_guide') {
+    const isAdminUser = currentUser && currentUser.role === 'admin';
+    if (!isAdminUser) {
+      switchView('dashboard');
+      return;
+    }
+    setElementDisplay('configGuideView', 'block');
+    setElementClass('navItemConfigGuide', 'active', true);
+    setElementClass('navItemConfigGuideLink', 'active', true);
+    renderConfigGuidePage();
+  } else if (viewName === 'admin') {
+    const isAdminUser = currentUser && currentUser.role === 'admin';
+    if (!isAdminUser) {
       switchView('dashboard');
       return;
     }
@@ -1321,6 +1411,41 @@ function switchView(viewName, event, subTab) {
 // 7. DASHBOARD & CALENDAR ENGINE
 // --------------------------------------------------------------------------
 
+function isMyPoliceCase(c, user) {
+  if (!user || user.role !== 'police') return true;
+
+  // 1. Station Matching (ตรวจเช็คสังกัด สภ.)
+  const caseStation = String(c.station || '').trim().toLowerCase();
+  const userStation = String(user.station || '').trim().toLowerCase();
+  let isStationMatch = true;
+  if (userStation && caseStation) {
+    isStationMatch = (
+      caseStation === userStation ||
+      caseStation.replace(/\s+/g, '') === userStation.replace(/\s+/g, '') ||
+      caseStation.includes(userStation) ||
+      userStation.includes(caseStation)
+    );
+  }
+
+  // 2. Officer Matching (ตรวจเช็คชื่อ/Username พนักงานสอบสวนเจ้าของคดี)
+  const caseOfficer = String(c.officer || '').trim().toLowerCase();
+  const userUsername = String(user.username || '').trim().toLowerCase();
+  const userName = String(user.name || '').trim().toLowerCase();
+
+  if (!caseOfficer) return false;
+
+  const isOfficerMatch = Boolean(
+    (userUsername && caseOfficer === userUsername) ||
+    (userName && caseOfficer === userName) ||
+    (userUsername && caseOfficer.replace(/\s+/g, '') === userUsername.replace(/\s+/g, '')) ||
+    (userName && caseOfficer.replace(/\s+/g, '') === userName.replace(/\s+/g, '')) ||
+    (userName && (caseOfficer.includes(userName) || userName.includes(caseOfficer))) ||
+    (userUsername && (caseOfficer.includes(userUsername) || userUsername.includes(caseOfficer)))
+  );
+
+  return isStationMatch && isOfficerMatch;
+}
+
 function renderDashboard() {
   if (!currentUser) return;
   const rawRequests = getRequests();
@@ -1329,10 +1454,12 @@ function renderDashboard() {
 
   let filteredCases = enrichedCases;
   if (currentUser && currentUser.role === 'police') {
-    filteredCases = enrichedCases.filter(c => c.officer === currentUser.username);
-    setElementText('dashboardSubtitle', `ติดตามกำหนดเวลาสำหรับ: ${currentUser.name || currentUser.username} (${currentUser.station || 'ไม่ระบุ'})`);
+    filteredCases = enrichedCases.filter(c => isMyPoliceCase(c, currentUser));
+    setElementText('dashboardSubtitle', `สภ.: ${currentUser.station || 'ไม่ระบุ'} | พนักงานสอบสวน: คุณ${currentUser.name || currentUser.username} (แสดงเฉพาะสำนวนคดีในความรับผิดชอบ)`);
+    setElementText('dashStatTotalLabel', 'คดีในความรับผิดชอบของฉัน');
   } else {
     setElementText('dashboardSubtitle', `คำนวณวันยื่นล่วงหน้า 1 วันทำการและเวลาตัดยื่น 16.00 น. ตามระเบียบศาลจังหวัดอุดรธานี พ.ศ. 2569`);
+    setElementText('dashStatTotalLabel', 'คดีทั้งหมดของศาล');
   }
 
   // Dashboard filtering rule:
@@ -2256,7 +2383,7 @@ function downloadPersonalICS(event) {
 // 9. COURT OFFICER WORKFLOW & BATCH NUMBERS
 // --------------------------------------------------------------------------
 
-function renderCourtView() {
+function renderCreateBatchView() {
   if (!currentUser) return;
 
   const curYear = new Date().getFullYear();
@@ -2269,15 +2396,6 @@ function renderCourtView() {
   const rawRequests = getRequests();
   const holidays = getHolidays();
   const enriched = rawRequests.map(r => enrichCase(r, holidays));
-
-  // Populate Station dropdown filter
-  const stationSelect = document.getElementById('courtStationFilter');
-  if (stationSelect && stationSelect.options.length <= 1) {
-    stationSelect.innerHTML = `<option value="">ทุกสถานีตำรวจ (23 สภ.)</option>`;
-    UDON_STATIONS.forEach(st => {
-      stationSelect.innerHTML += `<option value="${st}">${st}</option>`;
-    });
-  }
 
   // Render Sub-Sections matching uploaded image workflow:
   // 1. Assigned to station, waiting for police claim
@@ -2358,9 +2476,14 @@ function renderCourtView() {
       containerUnassigned.innerHTML = html;
     }
   }
+}
+window.renderCreateBatchView = renderCreateBatchView;
 
+function renderCourtView() {
+  renderCreateBatchView();
   renderCourtRequestsTable();
 }
+window.renderCourtView = renderCourtView;
 
 function pairCaseToStation(caseNumber) {
   const safeId = caseNumber.replace(/[^a-zA-Z0-9]/g, '_');
@@ -2376,7 +2499,11 @@ function pairCaseToStation(caseNumber) {
   if (target) {
     target.station = station;
     saveRequests(requests);
-    renderCourtView();
+    if (typeof currentActiveView !== 'undefined' && currentActiveView === 'create_batch') {
+      renderCreateBatchView();
+    } else {
+      renderCourtView();
+    }
     Swal.fire({ icon: 'success', title: 'จับคู่สถานีเรียบร้อย', text: `จับคู่เลขคดี ${caseNumber} กับ ${station} สำเร็จ`, timer: 1200, showConfirmButton: false });
   }
 }
@@ -2397,8 +2524,10 @@ function openBatchMatchStationModal() {
   if (stationSelect) {
     stationSelect.innerHTML = `<option value="">-- กรุณาเลือกสถานีตำรวจเป้าหมาย (23 สภ.) --</option>`;
     UDON_STATIONS.forEach(st => {
-      stationSelect.innerHTML += `<option value="${st}">${st}</option>`;
+      const isDefault = (st === 'สภ.เมืองอุดรธานี');
+      stationSelect.innerHTML += `<option value="${st}" ${isDefault ? 'selected' : ''}>${st}</option>`;
     });
+    stationSelect.value = 'สภ.เมืองอุดรธานี';
   }
 
   const searchInput = document.getElementById('batchMatchSearchFilter');
@@ -2411,16 +2540,26 @@ window.openBatchMatchStationModal = openBatchMatchStationModal;
 
 function renderBatchMatchModalContent() {
   const requests = getRequests();
-  // Filter unassigned cases that are not closed
-  const unassignedCases = requests.filter(c => !c.closed && (!c.station || c.station === '' || c.station === 'รอจับคู่สถานี'));
+  // Filter unassigned cases that are not closed, strictly deduplicated by caseNumber
+  const unassignedMap = new Map();
+  requests.forEach(c => {
+    if (!c.closed && (!c.station || c.station === '' || c.station === 'รอจับคู่สถานี')) {
+      const key = (c.caseNumber || '').trim();
+      if (key && !unassignedMap.has(key)) {
+        unassignedMap.set(key, c);
+      }
+    }
+  });
+  const unassignedCases = Array.from(unassignedMap.values());
 
   // Sort unassigned cases nicely (by Type, Year desc, Num asc)
   unassignedCases.sort((a, b) => {
     const compA = parseCaseComponents(a.caseNumber);
     const compB = parseCaseComponents(b.caseNumber);
+    if (!compA || !compB) return String(a.caseNumber).localeCompare(String(b.caseNumber));
     if (compA.type !== compB.type) return compA.type.localeCompare(compB.type);
     if (compA.year !== compB.year) return compB.year - compA.year;
-    return compA.num - compB.num;
+    return (compA.num || 0) - (compB.num || 0);
   });
 
   const availableContainer = document.getElementById('batchMatchAvailableChipsContainer');
@@ -2433,13 +2572,23 @@ function renderBatchMatchModalContent() {
   if (selectedCountEl) selectedCountEl.textContent = batchMatchSelectedCases.size;
   if (submitCountEl) submitCountEl.textContent = batchMatchSelectedCases.size;
 
-  // Render Selected Chips Box
+  // Render Selected Chips Box (Always sorted numerically ascending from left to right)
   if (selectedContainer) {
     if (batchMatchSelectedCases.size === 0) {
       selectedContainer.innerHTML = `<span style="color: #64748b; font-size: 0.85rem; font-weight: 500; padding: 0.25rem 0.5rem;">ยังไม่มีเลขที่เลือก (คลิกเลือกจากรายการด้านล่าง)</span>`;
     } else {
       let selectedHtml = '';
       const selectedArray = Array.from(batchMatchSelectedCases);
+      // Sort selected cases ascending (Type, Year desc, Num asc: น้อยไปหามาก)
+      selectedArray.sort((a, b) => {
+        const compA = parseCaseComponents(a);
+        const compB = parseCaseComponents(b);
+        if (!compA || !compB) return String(a).localeCompare(String(b));
+        if (compA.type !== compB.type) return compA.type.localeCompare(compB.type);
+        if (compA.year !== compB.year) return compB.year - compA.year;
+        return (compA.num || 0) - (compB.num || 0);
+      });
+
       selectedArray.forEach(caseNum => {
         selectedHtml += `
           <span style="display: inline-flex; align-items: center; gap: 0.4rem; background: #047857; border: 1px solid #065f46; color: #ffffff !important; font-weight: 700; font-family: monospace; font-size: 0.875rem; padding: 0.35rem 0.7rem; border-radius: 0.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.15);">
@@ -2511,7 +2660,16 @@ window.toggleBatchMatchCase = toggleBatchMatchCase;
 
 function selectAllBatchMatchCases() {
   const requests = getRequests();
-  const unassignedCases = requests.filter(c => !c.closed && (!c.station || c.station === '' || c.station === 'รอจับคู่สถานี'));
+  const unassignedMap = new Map();
+  requests.forEach(c => {
+    if (!c.closed && (!c.station || c.station === '' || c.station === 'รอจับคู่สถานี')) {
+      const key = (c.caseNumber || '').trim();
+      if (key && !unassignedMap.has(key)) {
+        unassignedMap.set(key, c);
+      }
+    }
+  });
+  const unassignedCases = Array.from(unassignedMap.values());
   
   let targetCases = unassignedCases;
   if (batchMatchSearchQuery) {
@@ -2601,6 +2759,16 @@ window.handleConfirmBatchMatch = handleConfirmBatchMatch;
 
 function renderCourtRequestsTable() {
   if (!currentUser) return;
+
+  // Populate Station dropdown filter
+  const stationSelect = document.getElementById('courtStationFilter');
+  if (stationSelect && stationSelect.options.length <= 1) {
+    stationSelect.innerHTML = `<option value="">ทุกสถานีตำรวจ (23 สภ.)</option>`;
+    UDON_STATIONS.forEach(st => {
+      stationSelect.innerHTML += `<option value="${st}">${st}</option>`;
+    });
+  }
+
   const stationFilter = (document.getElementById('courtStationFilter')?.value || '').trim();
   const statusFilter = (document.getElementById('courtStatusFilter')?.value || '').trim();
   const searchTerm = (document.getElementById('courtSearchInput')?.value || '').toLowerCase().trim();
@@ -3783,46 +3951,113 @@ function exportPoliceUsersExcel() {
 }
 window.exportPoliceUsersExcel = exportPoliceUsersExcel;
 
-function openHolidayModal(event) {
-  if (event) event.preventDefault();
+// --------------------------------------------------------------------------
+// 10. COURT HOLIDAYS MANAGEMENT (PAGE & TABLE)
+// --------------------------------------------------------------------------
+
+function renderHolidaysPage() {
+  if (!currentUser) return;
   
-  if (window.innerWidth < 768 && typeof Swal !== 'undefined' && Swal.isVisible && Swal.isVisible()) {
-    Swal.close();
-  }
+  const holidays = getHolidays();
+  const todayISO = toISO(new Date());
 
-  const el = document.getElementById('holidayModal');
-  if (el) el.classList.add('active');
-  renderHolidayTable();
-
-  const dateInput = document.getElementById('holidayDateInput');
+  // Attach Flatpickr Thai Datepicker
+  const dateInput = document.getElementById('pageHolidayDateInput');
   if (dateInput) {
-    const realToday = new Date();
-    if (dateInput._flatpickr) {
-      dateInput._flatpickr.setDate(realToday, true);
-    } else {
-      dateInput.value = toISO(realToday);
+    if (!dateInput._flatpickr) {
+      dateInput.value = toISO(new Date());
       attachThaiDatePicker(dateInput);
     }
   }
-}
 
-function renderHolidayTable() {
+  // Update Summary Stats
+  const totalCountEl = document.getElementById('holidayCountTotal');
+  if (totalCountEl) totalCountEl.textContent = holidays.length;
+
+  const upcomingHolidays = holidays.filter(h => h.date >= todayISO);
+  const upcomingCountEl = document.getElementById('holidayCountUpcoming');
+  if (upcomingCountEl) upcomingCountEl.textContent = upcomingHolidays.length;
+
+  const tableCountBadge = document.getElementById('holidayTableCountBadge');
+  if (tableCountBadge) tableCountBadge.textContent = holidays.length;
+
+  renderHolidayTableFromPage();
+}
+window.renderHolidaysPage = renderHolidaysPage;
+
+function renderHolidayTableFromPage() {
   const holidays = getHolidays();
-  const tbody = document.getElementById('holidayTableBody');
+  const tbody = document.getElementById('pageHolidayTableBody');
   if (!tbody) return;
+
+  const monthFilter = document.getElementById('holidayMonthFilter')?.value || 'all';
+  const searchTerm = (document.getElementById('holidaySearchInput')?.value || '').toLowerCase().trim();
+  const todayISO = toISO(new Date());
+
+  let filtered = [...holidays];
+
+  if (monthFilter !== 'all') {
+    const mNum = parseInt(monthFilter, 10);
+    filtered = filtered.filter(h => {
+      const parts = h.date.split('-');
+      if (parts.length >= 2) {
+        return (parseInt(parts[1], 10) - 1) === mNum;
+      }
+      return false;
+    });
+  }
+
+  if (searchTerm) {
+    filtered = filtered.filter(h => 
+      (h.name && h.name.toLowerCase().includes(searchTerm)) ||
+      (h.date && h.date.includes(searchTerm)) ||
+      formatThaiDate(h.date, true).toLowerCase().includes(searchTerm)
+    );
+  }
+
+  // Sort by date asc
+  filtered.sort((a, b) => a.date.localeCompare(b.date));
+
   tbody.innerHTML = '';
 
-  holidays.forEach((h, index) => {
+  if (filtered.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 2rem;">ไม่พบรายการวันหยุดราชการตามเงื่อนไขที่ค้นหา</td></tr>`;
+    return;
+  }
+
+  filtered.forEach((h, index) => {
+    const originalIndex = holidays.findIndex(item => item.date === h.date && item.name === h.name);
+    const isPast = h.date < todayISO;
+    const isToday = h.date === todayISO;
+
+    let statusBadge = '';
+    if (isToday) {
+      statusBadge = '<span class="badge badge-status-due"><i class="fa-solid fa-bell"></i> วันนี้</span>';
+    } else if (isPast) {
+      statusBadge = '<span class="badge" style="background:#f1f5f9; color:#64748b; border:1px solid #cbd5e1;"><i class="fa-solid fa-clock-rotate-left"></i> ผ่านมาแล้ว</span>';
+    } else {
+      statusBadge = '<span class="badge badge-status-uploaded"><i class="fa-solid fa-calendar-check"></i> กำลังจะมาถึง</span>';
+    }
+
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td><b>${formatThaiDate(h.date, true)}</b></td>
-      <td>${h.name}</td>
+      <td style="text-align: center; font-weight: 600; color: var(--text-muted);">${index + 1}</td>
       <td>
-        <div style="display: flex; gap: 0.35rem; align-items: center;">
-          <button onclick="editHoliday(${index})" class="btn-secondary" style="padding: 0.25rem 0.55rem; font-size: 0.75rem; background-color: #2563eb; color: #fff; border: none; border-radius: 0.35rem; cursor: pointer; display: inline-flex; align-items: center; gap: 0.25rem;">
+        <div style="font-weight: 700; color: #1e3a8a;">
+          <i class="fa-solid fa-calendar-day" style="color: #ef4444; margin-right: 0.35rem;"></i> ${formatThaiDate(h.date, true)}
+        </div>
+        <div style="font-size: 0.75rem; color: #64748b; font-family: monospace;">(${h.date})</div>
+      </td>
+      <td>
+        <div style="font-weight: 600; color: var(--text-main); font-size: 0.95rem;">${h.name}</div>
+      </td>
+      <td style="text-align: center;">${statusBadge}</td>
+      <td style="text-align: center;">
+        <div style="display: inline-flex; gap: 0.35rem; align-items: center; justify-content: center;">
+          <button onclick="editHoliday(${originalIndex >= 0 ? originalIndex : index})" type="button" class="btn-secondary" style="padding: 0.3rem 0.65rem; font-size: 0.775rem; background-color: #2563eb; color: #fff; border: none; border-radius: 0.35rem; cursor: pointer; display: inline-flex; align-items: center; gap: 0.25rem;">
             <i class="fa-solid fa-pen-to-square"></i> แก้ไข
           </button>
-          <button onclick="deleteHoliday(${index})" class="btn-secondary" style="padding: 0.25rem 0.55rem; font-size: 0.75rem; background-color: #dc2626; color: #fff; border: none; border-radius: 0.35rem; cursor: pointer; display: inline-flex; align-items: center; gap: 0.25rem;">
+          <button onclick="deleteHoliday(${originalIndex >= 0 ? originalIndex : index})" type="button" class="btn-secondary" style="padding: 0.3rem 0.65rem; font-size: 0.775rem; background-color: #dc2626; color: #fff; border: none; border-radius: 0.35rem; cursor: pointer; display: inline-flex; align-items: center; gap: 0.25rem;">
             <i class="fa-solid fa-trash"></i> ลบ
           </button>
         </div>
@@ -3830,6 +4065,91 @@ function renderHolidayTable() {
     `;
     tbody.appendChild(tr);
   });
+}
+window.renderHolidayTableFromPage = renderHolidayTableFromPage;
+
+function handleAddHolidayFromPage(event) {
+  event.preventDefault();
+  const dateRaw = document.getElementById('pageHolidayDateInput')?.value || '';
+  const date = toISO(dateRaw);
+  const name = (document.getElementById('pageHolidayNameInput')?.value || '').trim();
+
+  if (!date || date.includes('NaN')) {
+    Swal.fire({ icon: 'warning', title: 'กรุณาระบุวันที่', text: 'เลือกวันที่หยุดราชการให้ถูกต้อง' });
+    return;
+  }
+  if (!name) {
+    Swal.fire({ icon: 'warning', title: 'กรุณากรอกชื่อวันหยุด', text: 'กรอกชื่อวันหยุดราชการ' });
+    return;
+  }
+
+  const holidays = getHolidays();
+  if (holidays.some(h => h.date === date)) {
+    Swal.fire({ icon: 'error', title: 'วันหยุดซ้ำซ้อน', text: `วันที่ ${formatThaiDate(date, true)} มีบันทึกในระบบแล้ว` });
+    return;
+  }
+
+  holidays.push({ date, name });
+  holidays.sort((a, b) => a.date.localeCompare(b.date));
+  saveHolidays(holidays);
+
+  document.getElementById('pageHolidayNameInput').value = '';
+  renderHolidaysPage();
+  if (typeof renderDashboard === 'function') renderDashboard();
+
+  Swal.fire({
+    icon: 'success',
+    title: 'เพิ่มวันหยุดสำเร็จ',
+    text: `บันทึก "${name}" (${formatThaiDate(date, true)}) เรียบร้อยแล้ว`,
+    timer: 1500,
+    showConfirmButton: false
+  });
+}
+window.handleAddHolidayFromPage = handleAddHolidayFromPage;
+
+function loadStandard2569Holidays() {
+  const current = getHolidays();
+  let addedCount = 0;
+
+  DEFAULT_HOLIDAYS.forEach(def => {
+    if (!current.some(h => h.date === def.date)) {
+      current.push({ ...def });
+      addedCount++;
+    }
+  });
+
+  if (addedCount === 0) {
+    Swal.fire({
+      icon: 'info',
+      title: 'ข้อมูลครบถ้วนอยู่แล้ว',
+      text: 'วันหยุดมาตรฐานปี 2569 ทั้งหมดมีอยู่ในระบบเรียบร้อยแล้ว'
+    });
+    return;
+  }
+
+  current.sort((a, b) => a.date.localeCompare(b.date));
+  saveHolidays(current);
+  renderHolidaysPage();
+  if (typeof renderDashboard === 'function') renderDashboard();
+
+  Swal.fire({
+    icon: 'success',
+    title: 'นำเข้าวันหยุดสำเร็จ',
+    text: `เพิ่มวันหยุดมาตรฐานปี 2569 จำนวน ${addedCount} วันเรียบร้อยแล้ว`,
+    timer: 1800,
+    showConfirmButton: false
+  });
+}
+window.loadStandard2569Holidays = loadStandard2569Holidays;
+
+function openHolidayModal(event) {
+  if (event) event.preventDefault();
+  switchView('holidays');
+}
+window.openHolidayModal = openHolidayModal;
+
+function renderHolidayTable() {
+  renderHolidayTableFromPage();
 }
 
 function editHoliday(index) {
@@ -3879,7 +4199,7 @@ function editHoliday(index) {
       holidays[index] = { date: result.value.date, name: result.value.name };
       holidays.sort((a, b) => a.date.localeCompare(b.date));
       saveHolidays(holidays);
-      renderHolidayTable();
+      renderHolidaysPage();
       if (currentActiveView === 'dashboard') renderDashboard();
       Swal.fire({
         icon: 'success',
@@ -3890,44 +4210,42 @@ function editHoliday(index) {
     }
   });
 }
+window.editHoliday = editHoliday;
 
 function handleAddHoliday(event) {
-  event.preventDefault();
-  const dateRaw = document.getElementById('holidayDateInput')?.value || '';
-  const date = toISO(dateRaw);
-  const name = (document.getElementById('holidayNameInput')?.value || '').trim();
-
-  const holidays = getHolidays();
-  if (holidays.some(h => h.date === date)) {
-    Swal.fire({ icon: 'error', title: 'วันหยุดซ้ำซ้อน', text: 'วันหยุดนี้มีอยู่ในระบบแล้ว' });
-    return;
-  }
-
-  holidays.push({ date, name });
-  holidays.sort((a, b) => a.date.localeCompare(b.date));
-  saveHolidays(holidays);
-  const dateInput = document.getElementById('holidayDateInput');
-  if (dateInput) {
-    const realToday = new Date();
-    if (dateInput._flatpickr) {
-      dateInput._flatpickr.setDate(realToday, true);
-    } else {
-      dateInput.value = toISO(realToday);
-      attachThaiDatePicker(dateInput);
-    }
-  }
-  setElementValue('holidayNameInput', '');
-  renderHolidayTable();
-  if (currentActiveView === 'dashboard') renderDashboard();
+  handleAddHolidayFromPage(event);
 }
 
 function deleteHoliday(index) {
   const holidays = getHolidays();
-  holidays.splice(index, 1);
-  saveHolidays(holidays);
-  renderHolidayTable();
-  if (currentActiveView === 'dashboard') renderDashboard();
+  const h = holidays[index];
+  if (!h) return;
+
+  Swal.fire({
+    title: 'ยืนยันลบวันหยุด?',
+    html: `คุณต้องการลบวันหยุด <b>${h.name}</b> (${formatThaiDate(h.date, true)}) ใช่หรือไม่?`,
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonText: 'ใช่, ลบวันหยุด',
+    cancelButtonText: 'ยกเลิก',
+    confirmButtonColor: '#dc2626',
+    cancelButtonColor: '#64748b'
+  }).then((result) => {
+    if (result.isConfirmed) {
+      holidays.splice(index, 1);
+      saveHolidays(holidays);
+      renderHolidaysPage();
+      if (currentActiveView === 'dashboard') renderDashboard();
+      Swal.fire({
+        icon: 'success',
+        title: 'ลบวันหยุดเรียบร้อย',
+        timer: 1200,
+        showConfirmButton: false
+      });
+    }
+  });
 }
+window.deleteHoliday = deleteHoliday;
 
 // Global reference for last generated batch
 window.lastGeneratedPoliceBatch = null;
@@ -4624,53 +4942,236 @@ function deleteUser(username) {
   });
 }
 
-function openGoogleSettingsModal(event) {
-  if (event) {
-    try { if (typeof event.preventDefault === 'function') event.preventDefault(); } catch (e) {}
-    try { if (typeof event.stopPropagation === 'function') event.stopPropagation(); } catch (e) {}
+// --------------------------------------------------------------------------
+// GOOGLE SERVICES MANAGEMENT PAGE
+// --------------------------------------------------------------------------
+
+function renderGoogleSettingsPage() {
+  if (!currentUser) return;
+
+  const scriptUrl = localStorage.getItem('eredt_google_script') || DEFAULT_GOOGLE_SCRIPT_WEBAPP;
+  const folderId = localStorage.getItem('eredt_drive_folder') || DEFAULT_DRIVE_FOLDER_ID;
+  const csvUrl = localStorage.getItem('eredt_google_csv') || DEFAULT_GOOGLE_SHEET_CSV;
+  const lastSync = localStorage.getItem('eredt_last_sync');
+
+  // Set Inputs
+  const scriptInput = document.getElementById('pageGoogleScriptUrlInput');
+  const folderInput = document.getElementById('pageGoogleDriveFolderInput');
+  const csvInput = document.getElementById('pageGoogleSheetUrlInput');
+
+  if (scriptInput) scriptInput.value = scriptUrl;
+  if (folderInput) folderInput.value = folderId;
+  if (csvInput) csvInput.value = csvUrl;
+
+  // Set Status Displays
+  const sheetDisplay = document.getElementById('gsSheetIdDisplay');
+  if (sheetDisplay) sheetDisplay.textContent = SPREADSHEET_ID;
+
+  const folderDisplay = document.getElementById('gsDriveFolderDisplay');
+  if (folderDisplay) folderDisplay.textContent = folderId;
+
+  const lastSyncDisplay = document.getElementById('gsLastSyncDisplay');
+  if (lastSyncDisplay) {
+    if (lastSync) {
+      const syncDate = new Date(parseInt(lastSync, 10));
+      lastSyncDisplay.textContent = syncDate.toLocaleTimeString('th-TH') + ' (' + formatThaiDate(toISO(syncDate)) + ')';
+    } else {
+      lastSyncDisplay.textContent = 'ยังไม่มีการซิงค์';
+    }
   }
 
-  if (!currentUser || currentUser.role !== 'admin') {
-    if (typeof Swal !== 'undefined') {
-      Swal.fire({
-        icon: 'error',
-        title: 'ไม่มีสิทธิ์เข้าถึง',
-        text: 'เฉพาะสิทธิผู้ดูแลระบบ (Admin) เท่านั้นที่สามารถตั้งค่าการเชื่อมต่อ Google Services ได้',
-        confirmButtonColor: '#1e3a8a'
-      });
+  // Row counts diagnostic
+  const reqs = getRequests();
+  const users = getUsers();
+  const holidays = getHolidays();
+
+  setElementText('diagRequestsCount', `${reqs.length} รายการ`);
+  setElementText('diagUsersCount', `${users.length} บัญชี`);
+  setElementText('diagHolidaysCount', `${holidays.length} วัน`);
+
+  const statusBadge = document.getElementById('gsStatusBadge');
+  if (statusBadge) {
+    if (scriptUrl && scriptUrl.trim() !== '') {
+      statusBadge.innerHTML = '<span style="color: #059669;"><i class="fa-solid fa-circle-check"></i> พร้อมใช้งาน</span>';
+    } else {
+      statusBadge.innerHTML = '<span style="color: #ef4444;"><i class="fa-solid fa-circle-xmark"></i> ยังไม่ตั้งค่า</span>';
     }
+  }
+}
+window.renderGoogleSettingsPage = renderGoogleSettingsPage;
+
+function handleSaveGoogleSettingsPage(event) {
+  event.preventDefault();
+  const scriptUrl = document.getElementById('pageGoogleScriptUrlInput')?.value.trim() || '';
+  const folderId = document.getElementById('pageGoogleDriveFolderInput')?.value.trim() || '';
+  const csvUrl = document.getElementById('pageGoogleSheetUrlInput')?.value.trim() || '';
+
+  if (!scriptUrl) {
+    Swal.fire({ icon: 'warning', title: 'กรุณากรอก Web App URL', text: 'ระบุ Google Apps Script Web App URL' });
+    return;
+  }
+  if (!folderId) {
+    Swal.fire({ icon: 'warning', title: 'กรุณากรอก Folder ID', text: 'ระบุ Google Drive Target Folder ID' });
     return;
   }
 
-  // Auto-close SweetAlert on mobile screens (< 768px)
-  if (window.innerWidth < 768 && typeof Swal !== 'undefined' && Swal.isVisible && Swal.isVisible()) {
-    Swal.close();
+  localStorage.setItem('eredt_google_script', scriptUrl);
+  localStorage.setItem('eredt_drive_folder', folderId);
+  if (csvUrl) {
+    localStorage.setItem('eredt_google_csv', csvUrl);
   }
 
-  const csvEl = document.getElementById('googleSheetUrlInput');
-  const scriptEl = document.getElementById('googleScriptUrlInput');
-  const folderEl = document.getElementById('googleDriveFolderInput') || document.getElementById('googleFolderIdInput');
+  renderGoogleSettingsPage();
 
-  if (csvEl) csvEl.value = localStorage.getItem('eredt_google_csv') || DEFAULT_GOOGLE_SHEET_CSV;
-  if (scriptEl) scriptEl.value = localStorage.getItem('eredt_google_script') || DEFAULT_GOOGLE_SCRIPT_WEBAPP;
-  if (folderEl) folderEl.value = localStorage.getItem('eredt_drive_folder') || DEFAULT_DRIVE_FOLDER_ID;
+  Swal.fire({
+    icon: 'success',
+    title: 'บันทึกการตั้งค่าสำเร็จ',
+    text: 'บันทึกการเชื่อมต่อ Google Services เรียบร้อยแล้ว',
+    timer: 1500,
+    showConfirmButton: false
+  });
+}
+window.handleSaveGoogleSettingsPage = handleSaveGoogleSettingsPage;
 
-  openModal('googleSettingsModal');
+async function testGoogleConnection() {
+  const scriptUrl = localStorage.getItem('eredt_google_script') || DEFAULT_GOOGLE_SCRIPT_WEBAPP;
+  
+  if (!scriptUrl || scriptUrl.trim() === '') {
+    Swal.fire({
+      icon: 'warning',
+      title: 'ยังไม่ได้ระบุ Web App URL',
+      text: 'กรุณากรอก Web App URL ก่อนทดสอบการเชื่อมต่อ'
+    });
+    return;
+  }
+
+  Swal.fire({
+    title: 'กำลังทดสอบการเชื่อมต่อ...',
+    text: 'กำลังส่งคำขอ Ping ไปยัง Google Apps Script',
+    allowOutsideClick: false,
+    didOpen: () => Swal.showLoading()
+  });
+
+  const startTime = Date.now();
+  try {
+    const res = await fetch(`${scriptUrl}?action=getRequests`, { method: 'GET' });
+    const responseTime = Date.now() - startTime;
+    
+    if (res.ok) {
+      const data = await res.json();
+      Swal.fire({
+        icon: 'success',
+        title: 'การเชื่อมต่อสำเร็จ (Connected)',
+        html: `
+          <div style="text-align: left; font-size: 0.9rem; line-height: 1.6;">
+            <p><i class="fa-solid fa-circle-check" style="color: #059669;"></i> <b>สามารถเชื่อมต่อกับ Google Apps Script ได้สมบูรณ์</b></p>
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 0.5rem; padding: 0.75rem; font-size: 0.825rem; color: #334155; margin-top: 0.5rem;">
+              <div><b>Response Time:</b> ${responseTime} ms</div>
+              <div><b>ข้อมูลคำร้องที่พบใน Sheet:</b> ${Array.isArray(data) ? data.length : 0} รายการ</div>
+              <div><b>สถานะ HTTP:</b> ${res.status} OK</div>
+            </div>
+          </div>
+        `,
+        confirmButtonColor: '#1e3a8a'
+      });
+    } else {
+      throw new Error(`HTTP Status ${res.status}`);
+    }
+  } catch (err) {
+    Swal.fire({
+      icon: 'error',
+      title: 'เชื่อมต่อไม่สำเร็จ',
+      html: `
+        <div style="text-align: left; font-size: 0.85rem; line-height: 1.6;">
+          <p style="color: #ef4444; font-weight: 600;">ไม่สามารถติดต่อ Google Apps Script ได้</p>
+          <p>สาเหตุที่เป็นไปได้:</p>
+          <ul style="padding-left: 1.25rem;">
+            <li>Web App URL ไม่ถูกต้อง หรือยังไม่ได้ Deploy เป็น <b>Anyone</b></li>
+            <li>สิทธิ์การเข้าถึง Google Sheet ยังไม่ได้ตั้งเป็น "ทุกคนที่มีลิงก์มีสิทธิ์ดู/แก้ไข"</li>
+          </ul>
+          <p style="font-size: 0.75rem; color: #64748b; margin-top: 0.5rem;">Error: ${err.message}</p>
+        </div>
+      `,
+      confirmButtonColor: '#1e3a8a'
+    });
+  }
+}
+window.testGoogleConnection = testGoogleConnection;
+
+async function forcePushAllToGoogleSheet() {
+  const scriptUrl = localStorage.getItem('eredt_google_script') || DEFAULT_GOOGLE_SCRIPT_WEBAPP;
+  if (!scriptUrl) {
+    Swal.fire({ icon: 'warning', title: 'ยังไม่ได้ตั้งค่า Web App URL', text: 'กรุณาตั้งค่า Google Apps Script ก่อน' });
+    return;
+  }
+
+  const result = await Swal.fire({
+    title: 'ยืนยันการส่งออกข้อมูลทั้งหมด?',
+    text: 'ระบบจะนำข้อมูล คำร้อง, ผู้ใช้งาน, และวันหยุด ทั้งหมดในเครื่อง ส่งขึ้นบันทึกทับใน Google Sheet',
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonText: 'ยืนยันส่งข้อมูล',
+    cancelButtonText: 'ยกเลิก',
+    confirmButtonColor: '#7c3aed'
+  });
+
+  if (!result.isConfirmed) return;
+
+  Swal.fire({
+    title: 'กำลังส่งข้อมูลขึ้น Google Sheet...',
+    text: 'โปรดรอสักครู่ ระบบกำลังอัพเดทตาราง requests, users, และ holidays',
+    allowOutsideClick: false,
+    didOpen: () => Swal.showLoading()
+  });
+
+  try {
+    const requests = getRequests();
+    const users = getUsers();
+    const holidays = getHolidays();
+
+    await syncToGoogleSheet(requests);
+    await syncUsersToGoogleSheet(users);
+    await syncHolidaysToGoogleSheet(holidays);
+
+    localStorage.setItem('eredt_last_sync', Date.now().toString());
+    renderGoogleSettingsPage();
+
+    Swal.fire({
+      icon: 'success',
+      title: 'ส่งออกข้อมูลขึ้น Google Sheet สำเร็จ',
+      text: `ส่งคำร้อง ${requests.length} รายการ, ผู้ใช้ ${users.length} บัญชี, วันหยุด ${holidays.length} วัน เรียบร้อยแล้ว`,
+      confirmButtonColor: '#1e3a8a'
+    });
+  } catch (err) {
+    Swal.fire({
+      icon: 'error',
+      title: 'เกิดข้อผิดพลาดในการส่งข้อมูล',
+      text: err.message || 'ไม่สามารถส่งข้อมูลขึ้น Google Sheet ได้'
+    });
+  }
+}
+window.forcePushAllToGoogleSheet = forcePushAllToGoogleSheet;
+
+function openGoogleSettingsModal(event) {
+  if (event) {
+    try { if (typeof event.preventDefault === 'function') event.preventDefault(); } catch (e) {}
+  }
+  switchView('google_settings');
 }
 window.openGoogleSettingsModal = openGoogleSettingsModal;
+
+function renderConfigGuidePage() {
+  if (!currentUser) return;
+  switchConfigGuideTab('overview');
+}
+window.renderConfigGuidePage = renderConfigGuidePage;
 
 function openConfigGuideModal(event) {
   if (event) {
     try { if (typeof event.preventDefault === 'function') event.preventDefault(); } catch (e) {}
     try { if (typeof event.stopPropagation === 'function') event.stopPropagation(); } catch (e) {}
   }
-
-  if (window.innerWidth < 768 && typeof Swal !== 'undefined' && Swal.isVisible && Swal.isVisible()) {
-    Swal.close();
-  }
-
-  openModal('configGuideModal');
-  switchConfigGuideTab('overview');
+  switchView('config_guide');
 }
 window.openConfigGuideModal = openConfigGuideModal;
 
@@ -4845,6 +5346,15 @@ function parseUsersCSV(csvText) {
   return users;
 }
 
+function parseJSON(str) {
+  if (!str) return null;
+  try {
+    return typeof str === 'string' ? JSON.parse(str) : str;
+  } catch (e) {
+    return null;
+  }
+}
+
 function parseRequestsCSV(csvText) {
   const rows = parseCSV(csvText);
   if (rows.length <= 1) return [];
@@ -5014,8 +5524,9 @@ async function fetchLiveGoogleSheetData(options = {}) {
     updateProgress(95, 'กำลังอัพเดทระบบ...');
 
     if (Array.isArray(requestsData)) {
-      inMemoryRequests = requestsData;
-      localStorage.setItem('eredt_requests', JSON.stringify(requestsData));
+      const cleanReqs = deduplicateRequests(requestsData);
+      inMemoryRequests = cleanReqs;
+      localStorage.setItem('eredt_requests', JSON.stringify(cleanReqs));
     }
 
     if (Array.isArray(usersData) && usersData.length > 0) {
@@ -5078,11 +5589,18 @@ function refreshActiveView() {
   if (!currentUser) return;
   if (typeof currentActiveView !== 'undefined') {
     if (currentActiveView === 'dashboard') renderDashboard();
+    else if (currentActiveView === 'create_batch') renderCreateBatchView();
     else if (currentActiveView === 'requests') {
       if (currentUser && currentUser.role === 'police') renderPoliceView();
-      else renderCourtView();
+      else renderCourtRequestsTable();
+    } else if (currentActiveView === 'holidays') {
+      renderHolidaysPage();
+    } else if (currentActiveView === 'google_settings') {
+      if (currentUser && currentUser.role === 'admin') renderGoogleSettingsPage();
+    } else if (currentActiveView === 'config_guide') {
+      if (currentUser && currentUser.role === 'admin') renderConfigGuidePage();
     } else if (currentActiveView === 'admin') {
-      if (currentUser && currentUser.role !== 'police') renderAdminView();
+      if (currentUser && currentUser.role === 'admin') renderAdminView();
     }
   }
 }

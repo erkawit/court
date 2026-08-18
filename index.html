@@ -28,7 +28,7 @@
   <!-- SheetJS (XLSX) for Native Excel Exports -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <!-- System Stylesheet -->
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=2.7.0">
 </head>
 <body>
 
@@ -89,21 +89,21 @@
               <i class="fa-solid fa-chart-line"></i> <span>แดชบอร์ด & ปฏิทิน</span>
             </a>
           </li>
+          <li id="navItemCreateBatch">
+            <a id="navItemCreateBatchLink" href="javascript:void(0)" onclick="switchView('create_batch', event)" class="sidebar-item">
+              <i class="fa-solid fa-file-circle-plus" style="color: #60a5fa;"></i> <span>สร้างคำร้องฝากขังที่ 1</span>
+            </a>
+          </li>
           <li>
             <a id="navItemRequests" href="javascript:void(0)" onclick="switchView('requests', event)" class="sidebar-item">
-              <i class="fa-solid fa-folder-open"></i> <span id="navItemRequestsLabel">รายการยื่นคำร้องทั้งหมด</span>
+              <i class="fa-solid fa-folder-open"></i> <span id="navItemRequestsLabel">รายการทะเบียนติดตามคำร้องฝากขังทุกสถานี</span>
             </a>
           </li>
 
           <!-- COURT MENUS -->
           <li id="navCategoryCourt" class="sidebar-menu-category">การจัดการศาล</li>
-          <li id="navItemCreateBatch">
-            <a href="javascript:void(0)" onclick="openCreateBatchModal(event)" class="sidebar-item">
-              <i class="fa-solid fa-file-signature" style="color: #60a5fa;"></i> <span>สร้างชุดเลขคำร้อง (ยฝ./ฝ.)</span>
-            </a>
-          </li>
           <li id="navItemHolidays">
-            <a href="javascript:void(0)" onclick="openHolidayModal(event)" class="sidebar-item">
+            <a id="navItemHolidaysLink" href="javascript:void(0)" onclick="switchView('holidays', event)" class="sidebar-item">
               <i class="fa-solid fa-calendar-xmark" style="color: #f87171;"></i> <span>จัดการวันหยุดศาล</span>
             </a>
           </li>
@@ -116,12 +116,12 @@
             </a>
           </li>
           <li id="navItemGoogleSettings" style="display: none;">
-            <a id="navItemGoogleSettingsLink" href="javascript:void(0)" onclick="openGoogleSettingsModal(event)" class="sidebar-item">
-              <i class="fa-solid fa-file-excel" style="color: #34d399;"></i> <span>เชื่อมต่อ Google Services</span>
+            <a id="navItemGoogleSettingsLink" href="javascript:void(0)" onclick="switchView('google_settings', event)" class="sidebar-item">
+              <i class="fa-solid fa-file-excel" style="color: #34d399;"></i> <span>จัดการเชื่อมต่อ Google Services</span>
             </a>
           </li>
           <li id="navItemConfigGuide" style="display: none;">
-            <a id="navItemConfigGuideLink" href="javascript:void(0)" onclick="openConfigGuideModal(event)" class="sidebar-item">
+            <a id="navItemConfigGuideLink" href="javascript:void(0)" onclick="switchView('config_guide', event)" class="sidebar-item">
               <i class="fa-solid fa-book-bookmark" style="color: #60a5fa;"></i> <span>คู่มือการตั้งค่าระบบ</span>
             </a>
           </li>
@@ -139,10 +139,13 @@
       <button id="mbNavDashboard" onclick="switchView('dashboard', event)" class="bnav-item active" title="แดชบอร์ด & ปฏิทิน">
         <i class="fa-solid fa-chart-line"></i>
       </button>
-      <button id="mbNavRequests" onclick="switchView('requests', event)" class="bnav-item" title="รายการคำร้องทั้งหมด">
+      <button id="mbNavCreateBatch" onclick="switchView('create_batch', event)" class="bnav-item" title="สร้างคำร้องฝากขังที่ 1">
+        <i class="fa-solid fa-file-circle-plus"></i>
+      </button>
+      <button id="mbNavRequests" onclick="switchView('requests', event)" class="bnav-item" title="รายการทะเบียนติดตามคำร้องฝากขังทุกสถานี">
         <i class="fa-solid fa-folder-open"></i>
       </button>
-      <button id="mbNavHolidays" onclick="openHolidayModal(event)" class="bnav-item" title="จัดการวันหยุดศาล">
+      <button id="mbNavHolidays" onclick="switchView('holidays', event)" class="bnav-item" title="จัดการวันหยุดศาล">
         <i class="fa-solid fa-calendar-xmark"></i>
       </button>
       <button id="mbNavAdmin" onclick="switchView('admin', event)" class="bnav-item" style="display: none;" title="จัดการผู้ใช้งาน">
@@ -245,110 +248,125 @@
 
       </div>
 
-      <!-- 2. REQUESTS LIST VIEW (COURT & ADMIN) -->
+      <!-- 2. CREATE BATCH 1st REMAND VIEW (COURT: รายการกำหนดเลขคำร้องขอฝากขังของศาล) -->
+      <div id="createBatchView" class="animate-fade-in" style="display: none;">
+        <div class="view-header">
+          <div class="view-title">
+            <h2><i class="fa-solid fa-file-circle-plus" style="color: var(--primary);"></i> รายการกำหนดเลขคำร้องขอฝากขังของศาล</h2>
+            <p>ลงข้อมูลเลขฝากขังครั้งที่ 1 (ยฝ./ฝ.) กำหนดวันฝากขังครั้งแรก และจับคู่สถานีตำรวจ</p>
+          </div>
+          <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            <button onclick="openBatchMatchStationModal()" type="button" class="btn-primary" style="width: auto; background: linear-gradient(135deg, #0d9488, #0f766e); border-color: #0f766e; color: #fff; font-size: 0.85rem; padding: 0.45rem 0.95rem; display: inline-flex; align-items: center; gap: 0.4rem;" title="เปิดหน้าต่างจับคู่เลขฝากขังกับสถานีตำรวจหลายรายการพร้อมกัน">
+              <i class="fa-solid fa-layer-group"></i> จับคู่หลายรายการ
+            </button>
+            <button onclick="fetchLiveGoogleSheetData({ isManual: true })" class="btn-secondary" style="width: auto;">
+              <i class="fa-solid fa-rotate" style="color: #ffffff;"></i> ซิงค์ Google Sheet
+            </button>
+          </div>
+        </div>
+
+        <!-- Inline Batch Case Creation & Station Pairing Panel -->
+        <div class="white-panel" style="padding: 1.5rem; margin-bottom: 1.5rem; border-top: 4px solid var(--primary);">
+          
+          <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem; border-bottom: 1px dashed #cbd5e1; padding-bottom: 0.85rem; margin-bottom: 1rem;">
+            <h3 style="font-size: 1.15rem; font-weight: 700; color: var(--primary); display: flex; align-items: center; gap: 0.5rem; margin: 0;">
+              <i class="fa-solid fa-plus" style="color: var(--accent-gold);"></i> เพิ่มคำร้องฝากขังครั้งที่ 1
+            </h3>
+            <div style="font-size: 0.825rem; color: var(--text-muted); font-weight: 500;">
+              รอจับคู่ สภ. <span id="summaryUnassignedCount" class="badge badge-status-due" style="margin: 0 0.25rem;">0</span> · 
+              รอพนักงานรับ <span id="summaryUnclaimedCount" class="badge badge-status-uploaded" style="margin: 0 0.25rem;">0</span>
+            </div>
+          </div>
+
+          <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.25rem; line-height: 1.5;">
+            ลงข้อมูลฝากขังครั้งแรก — ระบบคำนวณวันครบกำหนด/วันต้องยื่นครั้งต่อไปให้ทันที ไม่ต้องรอจับคู่สถานีหรือรอพนักงานมารับก่อน
+          </p>
+
+          <form onsubmit="handleCreateBatch(event)">
+            <div class="form-row" style="margin-bottom: 1rem;">
+              <div class="form-group" style="flex: 1.5; min-width: 180px;">
+                <label for="batchTypeSelect"><i class="fa-solid fa-tag"></i> ประเภท</label>
+                <select id="batchTypeSelect" class="form-control" required>
+                  <option value="ยฝ.">ยฝ. (คดียาเสพติด)</option>
+                  <option value="ฝ.">ฝ. (คดีทั่วไป)</option>
+                </select>
+              </div>
+
+              <div class="form-group" style="flex: 1; min-width: 110px;">
+                <label for="batchStartNumInput">เลขเริ่ม</label>
+                <input type="number" id="batchStartNumInput" class="form-control" placeholder="1" min="1" required>
+              </div>
+
+              <div class="form-group" style="flex: 1; min-width: 110px;">
+                <label for="batchEndNumInput">ถึงเลข</label>
+                <input type="number" id="batchEndNumInput" class="form-control" placeholder="50" min="1" required>
+              </div>
+
+              <div class="form-group" style="flex: 1; min-width: 110px;">
+                <label for="batchYearInput">ปี พ.ศ.</label>
+                <input type="number" id="batchYearInput" class="form-control" value="2569" required>
+              </div>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 1.25rem;">
+              <label for="batchStartDateInput"><i class="fa-solid fa-calendar-day"></i> วันที่ฝากขังครั้งแรก (ใช้คำนวณวันครบกำหนดครั้งที่ 2)</label>
+              <input type="text" id="batchStartDateInput" class="form-control thai-datepicker" required>
+            </div>
+
+            <div style="margin-bottom: 1.5rem;">
+              <button type="submit" class="btn-primary" style="width: 100%; padding: 0.75rem; font-size: 1rem; font-weight: 700; background: linear-gradient(135deg, #1e3a8a, #1d4ed8);">
+                <i class="fa-solid fa-layer-group"></i> สร้างชุดคดี
+              </button>
+            </div>
+          </form>
+
+          <div style="border-top: 1px dashed #e2e8f0; padding-top: 1.25rem; margin-top: 1rem;">
+            <!-- Section 1: Assigned to station, waiting for police claim -->
+            <div style="margin-bottom: 1.5rem;">
+              <h4 style="font-size: 0.95rem; font-weight: 700; color: #475569; margin-bottom: 0.75rem;">
+                <i class="fa-solid fa-user-clock" style="color: #d97706;"></i> จับคู่สถานีแล้ว รอพนักงานสอบสวนมารับเป็นเจ้าของคดี (<span id="countAssignedUnclaimed">0</span> คดี)
+              </h4>
+              <div id="containerAssignedUnclaimed">
+                <div style="text-align: center; padding: 1rem; color: #94a3b8; font-size: 0.85rem; background: #f8fafc; border-radius: 0.5rem;">
+                  ไม่มีคดีที่รอพนักงานรับตอนนี้
+                </div>
+              </div>
+            </div>
+
+            <!-- Section 2: Unassigned cases waiting for station pairing -->
+            <div>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
+                <h4 style="font-size: 0.95rem; font-weight: 700; color: #475569; margin: 0;">
+                  <i class="fa-solid fa-link" style="color: #2563eb;"></i> จับคู่คดีกับสถานี — แยกเป็นชุดตามที่สร้างแต่ละครั้ง (<span id="countUnassignedTotal">0</span> คดีรอจับคู่ทั้งหมด)
+                </h4>
+                <button onclick="openBatchMatchStationModal()" type="button" class="btn-primary" style="width: auto; padding: 0.3rem 0.75rem; font-size: 0.8rem; background-color: #0d9488; border-color: #0d9488;">
+                  <i class="fa-solid fa-layer-group"></i> จับคู่หลายรายการ
+                </button>
+              </div>
+              <div id="containerUnassignedBatches">
+                <div style="text-align: center; padding: 1rem; color: #94a3b8; font-size: 0.85rem; background: #f8fafc; border-radius: 0.5rem;">
+                  ไม่มีเลขที่รอจับคู่สถานี
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- 3. REQUESTS LIST VIEW (ALL REQUESTS REGISTRY: รายการทะเบียนติดตามคำร้องฝากขังทุกสถานี) -->
       <div id="requestsView" class="animate-fade-in" style="display: none;">
         <div id="courtRequestsSection">
           <div class="view-header">
             <div class="view-title">
-              <h2><i class="fa-solid fa-gavel" style="color: var(--primary);"></i> รายการกำหนดเลขคำร้องขอฝากขังของศาล</h2>
-              <p>คำนวณวันยื่นล่วงหน้า 1 วันทำการ ตรวจสอบเอกสาร PDF ยืนยันรับเรื่อง ปรับเพดานฝากขัง และแจ้งไฟล์ผิด</p>
+              <h2><i class="fa-solid fa-folder-open" style="color: var(--primary);"></i> รายการยื่นคำร้องทั้งหมด</h2>
+              <p>รายการทะเบียนติดตามคำร้องฝากขังทุกสถานีตำรวจ (23 สภ.) ตรวจสอบเอกสาร PDF ยืนยันรับเรื่อง ปรับเพดานฝากขัง และแจ้งไฟล์ผิด</p>
             </div>
             <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-              <button onclick="openBatchMatchStationModal()" type="button" class="btn-primary" style="width: auto; background: linear-gradient(135deg, #0d9488, #0f766e); border-color: #0f766e; color: #fff; font-size: 0.85rem; padding: 0.45rem 0.95rem; display: inline-flex; align-items: center; gap: 0.4rem;" title="เปิดหน้าต่างจับคู่เลขฝากขังกับสถานีตำรวจหลายรายการพร้อมกัน">
-                <i class="fa-solid fa-layer-group"></i> จับคู่หลายรายการ
-              </button>
               <button onclick="fetchLiveGoogleSheetData({ isManual: true })" class="btn-secondary" style="width: auto;">
                 <i class="fa-solid fa-rotate" style="color: #ffffff;"></i> ซิงค์ Google Sheet
               </button>
             </div>
-          </div>
-
-          <!-- Inline Batch Case Creation & Station Pairing Panel (Matching Image Workflow) -->
-          <div class="white-panel" style="padding: 1.5rem; margin-bottom: 1.5rem; border-top: 4px solid var(--primary);">
-            
-            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem; border-bottom: 1px dashed #cbd5e1; padding-bottom: 0.85rem; margin-bottom: 1rem;">
-              <h3 style="font-size: 1.15rem; font-weight: 700; color: var(--primary); display: flex; align-items: center; gap: 0.5rem; margin: 0;">
-                <i class="fa-solid fa-plus" style="color: var(--accent-gold);"></i> เพิ่มคำร้องฝากขังครั้งที่ 1
-              </h3>
-              <div style="font-size: 0.825rem; color: var(--text-muted); font-weight: 500;">
-                รอจับคู่ สภ. <span id="summaryUnassignedCount" class="badge badge-status-due" style="margin: 0 0.25rem;">0</span> · 
-                รอพนักงานรับ <span id="summaryUnclaimedCount" class="badge badge-status-uploaded" style="margin: 0 0.25rem;">0</span>
-              </div>
-            </div>
-
-            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.25rem; line-height: 1.5;">
-              ลงข้อมูลฝากขังครั้งแรก — ระบบคำนวณวันครบกำหนด/วันต้องยื่นครั้งต่อไปให้ทันที ไม่ต้องรอจับคู่สถานีหรือรอพนักงานมารับก่อน
-            </p>
-
-            <form onsubmit="handleCreateBatch(event)">
-              <div class="form-row" style="margin-bottom: 1rem;">
-                <div class="form-group" style="flex: 1.5; min-width: 180px;">
-                  <label for="batchTypeSelect"><i class="fa-solid fa-tag"></i> ประเภท</label>
-                  <select id="batchTypeSelect" class="form-control" required>
-                    <option value="ยฝ.">ยฝ. (คดียาเสพติด)</option>
-                    <option value="ฝ.">ฝ. (คดีทั่วไป)</option>
-                  </select>
-                </div>
-
-                <div class="form-group" style="flex: 1; min-width: 110px;">
-                  <label for="batchStartNumInput">เลขเริ่ม</label>
-                  <input type="number" id="batchStartNumInput" class="form-control" placeholder="1" min="1" required>
-                </div>
-
-                <div class="form-group" style="flex: 1; min-width: 110px;">
-                  <label for="batchEndNumInput">ถึงเลข</label>
-                  <input type="number" id="batchEndNumInput" class="form-control" placeholder="50" min="1" required>
-                </div>
-
-                <div class="form-group" style="flex: 1; min-width: 110px;">
-                  <label for="batchYearInput">ปี พ.ศ.</label>
-                  <input type="number" id="batchYearInput" class="form-control" value="2569" required>
-                </div>
-              </div>
-
-              <div class="form-group" style="margin-bottom: 1.25rem;">
-                <label for="batchStartDateInput"><i class="fa-solid fa-calendar-day"></i> วันที่ฝากขังครั้งแรก (ใช้คำนวณวันครบกำหนดครั้งที่ 2)</label>
-                <input type="text" id="batchStartDateInput" class="form-control thai-datepicker" required>
-              </div>
-
-              <div style="margin-bottom: 1.5rem;">
-                <button type="submit" class="btn-primary" style="width: 100%; padding: 0.75rem; font-size: 1rem; font-weight: 700; background: linear-gradient(135deg, #1e3a8a, #1d4ed8);">
-                  <i class="fa-solid fa-layer-group"></i> สร้างชุดคดี
-                </button>
-              </div>
-            </form>
-
-            <div style="border-top: 1px dashed #e2e8f0; padding-top: 1.25rem; margin-top: 1rem;">
-              <!-- Section 1: Assigned to station, waiting for police claim -->
-              <div style="margin-bottom: 1.5rem;">
-                <h4 style="font-size: 0.95rem; font-weight: 700; color: #475569; margin-bottom: 0.75rem;">
-                  <i class="fa-solid fa-user-clock" style="color: #d97706;"></i> จับคู่สถานีแล้ว รอพนักงานสอบสวนมารับเป็นเจ้าของคดี (<span id="countAssignedUnclaimed">0</span> คดี)
-                </h4>
-                <div id="containerAssignedUnclaimed">
-                  <div style="text-align: center; padding: 1rem; color: #94a3b8; font-size: 0.85rem; background: #f8fafc; border-radius: 0.5rem;">
-                    ไม่มีคดีที่รอพนักงานรับตอนนี้
-                  </div>
-                </div>
-              </div>
-
-              <!-- Section 2: Unassigned cases waiting for station pairing -->
-              <div>
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
-                  <h4 style="font-size: 0.95rem; font-weight: 700; color: #475569; margin: 0;">
-                    <i class="fa-solid fa-link" style="color: #2563eb;"></i> จับคู่คดีกับสถานี — แยกเป็นชุดตามที่สร้างแต่ละครั้ง (<span id="countUnassignedTotal">0</span> คดีรอจับคู่ทั้งหมด)
-                  </h4>
-                  <button onclick="openBatchMatchStationModal()" type="button" class="btn-primary" style="width: auto; padding: 0.3rem 0.75rem; font-size: 0.8rem; background-color: #0d9488; border-color: #0d9488;">
-                    <i class="fa-solid fa-layer-group"></i> จับคู่หลายรายการ
-                  </button>
-                </div>
-                <div id="containerUnassignedBatches">
-                  <div style="text-align: center; padding: 1rem; color: #94a3b8; font-size: 0.85rem; background: #f8fafc; border-radius: 0.5rem;">
-                    ไม่มีเลขที่รอจับคู่สถานี
-                  </div>
-                </div>
-              </div>
-            </div>
-
           </div>
 
           <div class="white-panel" style="padding: 1.5rem;">
@@ -471,6 +489,766 @@
                 <!-- Users rendered by app.js -->
               </tbody>
             </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4. COURT HOLIDAYS MANAGEMENT VIEW (จัดการวันหยุดศาล) -->
+      <div id="holidaysView" class="animate-fade-in" style="display: none;">
+        <div class="view-header">
+          <div class="view-title">
+            <h2><i class="fa-solid fa-calendar-xmark" style="color: #ef4444;"></i> กำหนดและจัดการวันหยุดศาล (Court Holidays)</h2>
+            <p>กำหนดวันหยุดราชการและวันหยุดทำการของศาล เพื่อใช้คำนวณวันครบกำหนดและวันต้องยื่นฝากขังล่วงหน้า 1 วันทำการ (ตามระเบียบศาลจังหวัดอุดรธานี)</p>
+          </div>
+          <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            <button onclick="loadStandard2569Holidays()" type="button" class="btn-secondary" style="width: auto; background-color: #0284c7; border-color: #0284c7; color: #fff;">
+              <i class="fa-solid fa-calendar-plus"></i> เพิ่มวันหยุดมาตรฐานปี 2569
+            </button>
+            <button onclick="fetchLiveGoogleSheetData({ isManual: true })" class="btn-secondary" style="width: auto;">
+              <i class="fa-solid fa-rotate" style="color: #ffffff;"></i> ซิงค์ Google Sheet
+            </button>
+          </div>
+        </div>
+
+        <!-- Summary Stats Grid -->
+        <div class="stats-grid" style="margin-bottom: 1.5rem;">
+          <div class="white-card stat-card">
+            <div class="stat-icon red"><i class="fa-solid fa-calendar-xmark"></i></div>
+            <div class="stat-info">
+              <div id="holidayCountTotal" class="stat-value">0</div>
+              <div class="stat-label">วันหยุดทั้งหมดในระบบ</div>
+            </div>
+          </div>
+          <div class="white-card stat-card">
+            <div class="stat-icon amber"><i class="fa-solid fa-hourglass-half"></i></div>
+            <div class="stat-info">
+              <div id="holidayCountUpcoming" class="stat-value">0</div>
+              <div class="stat-label">วันหยุดที่กำลังจะมาถึง</div>
+            </div>
+          </div>
+          <div class="white-card stat-card">
+            <div class="stat-icon emerald"><i class="fa-solid fa-cloud-check"></i></div>
+            <div class="stat-info">
+              <div id="holidaySyncStatus" class="stat-value" style="font-size: 1.15rem; color: #059669;">พร้อมใช้งาน</div>
+              <div class="stat-label">สถานะซิงค์ Google Sheet</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Add Holiday Form Panel -->
+        <div class="white-panel" style="padding: 1.5rem; margin-bottom: 1.5rem; border-top: 4px solid #ef4444;">
+          <h3 style="font-size: 1.1rem; font-weight: 700; color: #991b1b; display: flex; align-items: center; gap: 0.5rem; margin-top: 0; margin-bottom: 1rem;">
+            <i class="fa-solid fa-plus-circle" style="color: #ef4444;"></i> เพิ่มวันหยุดราชการ / วันหยุดศาลใหม่
+          </h3>
+          <form onsubmit="handleAddHolidayFromPage(event)">
+            <div class="form-row">
+              <div class="form-group" style="flex: 1.2; min-width: 200px;">
+                <label for="pageHolidayDateInput"><i class="fa-solid fa-calendar-day"></i> วันที่หยุด (เลือกจากปฏิทินไทย)</label>
+                <input type="text" id="pageHolidayDateInput" class="form-control thai-datepicker" placeholder="เลือกวันที่หยุด" required>
+              </div>
+              <div class="form-group" style="flex: 2; min-width: 250px;">
+                <label for="pageHolidayNameInput"><i class="fa-solid fa-tag"></i> ชื่อวันหยุดราชการ</label>
+                <input type="text" id="pageHolidayNameInput" class="form-control" placeholder="เช่น วันเฉลิมพระชนมพรรษา, วันขึ้นปีใหม่, วันสงกรานต์..." required>
+              </div>
+            </div>
+            <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.5rem;">
+              <button type="submit" class="btn-primary" style="width: auto; padding: 0.5rem 1.25rem; background: linear-gradient(135deg, #dc2626, #b91c1c); border-color: #b91c1c;">
+                <i class="fa-solid fa-plus"></i> บันทึกเพิ่มวันหยุด
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Holidays Table Panel -->
+        <div class="white-panel" style="padding: 1.5rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; flex-wrap: wrap; gap: 1rem;">
+            <h3 style="font-size: 1.1rem; font-weight: 700; margin: 0; display: flex; align-items: center; gap: 0.5rem;">
+              <i class="fa-solid fa-list-check" style="color: #ef4444;"></i> รายการวันหยุดราชการประจำปี (<span id="holidayTableCountBadge">0</span> วัน)
+            </h3>
+            <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+              <select id="holidayMonthFilter" onchange="renderHolidayTableFromPage()" class="form-control" style="width: 170px; padding: 0.4rem 0.65rem; font-size: 0.85rem;">
+                <option value="all">ทุกเดือน (ทั้งปี)</option>
+                <option value="0">มกราคม</option>
+                <option value="1">กุมภาพันธ์</option>
+                <option value="2">มีนาคม</option>
+                <option value="3">เมษายน</option>
+                <option value="4">พฤษภาคม</option>
+                <option value="5">มิถุนายน</option>
+                <option value="6">กรกฎาคม</option>
+                <option value="7">สิงหาคม</option>
+                <option value="8">กันยายน</option>
+                <option value="9">ตุลาคม</option>
+                <option value="10">พฤศจิกายน</option>
+                <option value="11">ธันวาคม</option>
+              </select>
+              <div style="position: relative;">
+                <input type="text" id="holidaySearchInput" oninput="renderHolidayTableFromPage()" class="form-control" placeholder="ค้นหาชื่อวันหยุด / วันที่..." style="padding-left: 2.2rem; width: 220px; font-size: 0.85rem;">
+                <i class="fa-solid fa-magnifying-glass" style="position: absolute; left: 0.8rem; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 0.85rem;"></i>
+              </div>
+            </div>
+          </div>
+
+          <div class="table-container">
+            <table class="data-table" style="width: 100%;">
+              <thead>
+                <tr>
+                  <th style="width: 60px; text-align: center;">ลำดับ</th>
+                  <th style="width: 220px;">วันที่หยุดราชการ</th>
+                  <th>ชื่อวันหยุด</th>
+                  <th style="width: 150px; text-align: center;">สถานะ</th>
+                  <th style="width: 150px; text-align: center;">การจัดการ</th>
+                </tr>
+              </thead>
+              <tbody id="pageHolidayTableBody">
+                <!-- Rendered via app.js -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- 5. GOOGLE SERVICES CONNECTIVITY VIEW (จัดการเชื่อมต่อ Google Services) -->
+      <div id="googleSettingsView" class="animate-fade-in" style="display: none;">
+        <div class="view-header">
+          <div class="view-title">
+            <h2><i class="fa-solid fa-cloud-arrow-up" style="color: #10b981;"></i> จัดการเชื่อมต่อ Google Services</h2>
+            <p>ตั้งค่าและตรวจสอบสถานะการเชื่อมโยงข้อมูลระหว่างระบบ e-REDT กับ Google Sheets และ Google Drive</p>
+          </div>
+          <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            <button onclick="openConfigGuideModal(event)" type="button" class="btn-secondary" style="width: auto; background-color: #0284c7; border-color: #0284c7; color: #fff;">
+              <i class="fa-solid fa-book-bookmark"></i> คู่มือการตั้งค่า & ย้ายฐานข้อมูล
+            </button>
+            <button onclick="testGoogleConnection()" type="button" class="btn-primary" style="width: auto; background: linear-gradient(135deg, #059669, #10b981); border-color: #059669;">
+              <i class="fa-solid fa-tower-broadcast"></i> ทดสอบการเชื่อมต่อ API
+            </button>
+          </div>
+        </div>
+
+        <!-- Connection Cards Grid -->
+        <div class="stats-grid" style="margin-bottom: 1.5rem;">
+          <div class="white-card stat-card">
+            <div class="stat-icon emerald"><i class="fa-solid fa-circle-nodes"></i></div>
+            <div class="stat-info">
+              <div id="gsStatusBadge" class="stat-value" style="font-size: 1.15rem; color: #059669;">พร้อมใช้งาน</div>
+              <div class="stat-label">สถานะ Web App API</div>
+            </div>
+          </div>
+          <div class="white-card stat-card">
+            <div class="stat-icon blue"><i class="fa-solid fa-file-excel"></i></div>
+            <div class="stat-info">
+              <div id="gsSheetIdDisplay" class="stat-value" style="font-size: 0.95rem; font-family: monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 180px;">1q_dX4g8e33vR1U3p-F5w7E6kU1U8h8Bf6H3M5y9s2P4</div>
+              <div class="stat-label">Google Sheet ID</div>
+            </div>
+          </div>
+          <div class="white-card stat-card">
+            <div class="stat-icon amber"><i class="fa-solid fa-folder-tree"></i></div>
+            <div class="stat-info">
+              <div id="gsDriveFolderDisplay" class="stat-value" style="font-size: 0.95rem; font-family: monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 180px;">1l5ZDlXI14lgFc6WGqmZ3kQ9qB-ci-ArM</div>
+              <div class="stat-label">Drive Target Folder</div>
+            </div>
+          </div>
+          <div class="white-card stat-card">
+            <div class="stat-icon indigo"><i class="fa-solid fa-clock-rotate-left"></i></div>
+            <div class="stat-info">
+              <div id="gsLastSyncDisplay" class="stat-value" style="font-size: 0.95rem; font-weight: 600;">-</div>
+              <div class="stat-label">ซิงค์ล่าสุด (Last Synced)</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Form Configuration Panel -->
+        <div class="white-panel" style="padding: 1.5rem; margin-bottom: 1.5rem; border-top: 4px solid #10b981;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px dashed #cbd5e1; padding-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
+            <h3 style="font-size: 1.15rem; font-weight: 700; color: var(--primary); margin: 0; display: flex; align-items: center; gap: 0.5rem;">
+              <i class="fa-solid fa-sliders" style="color: #10b981;"></i> กำหนดค่าการเชื่อมต่อ Google API
+            </h3>
+            <a href="https://docs.google.com/spreadsheets/d/1q_dX4g8e33vR1U3p-F5w7E6kU1U8h8Bf6H3M5y9s2P4/edit" target="_blank" class="btn-secondary" style="width: auto; padding: 0.35rem 0.75rem; font-size: 0.8rem; background: #107c41; color: #fff; border-color: #107c41; text-decoration: none;">
+              <i class="fa-solid fa-arrow-up-right-from-square"></i> เปิดดู Google Sheet
+            </a>
+          </div>
+
+          <form onsubmit="handleSaveGoogleSettingsPage(event)">
+            <div class="form-group" style="margin-bottom: 1.25rem;">
+              <label for="pageGoogleScriptUrlInput" style="font-weight: 700; display: flex; justify-content: space-between; flex-wrap: wrap;">
+                <span><i class="fa-solid fa-link" style="color: #2563eb;"></i> Web App URL (Google Apps Script Endpoint) <span style="color: #ef4444;">*</span></span>
+                <span style="font-size: 0.775rem; color: #64748b; font-weight: normal;">Deploy as Web app: Anyone</span>
+              </label>
+              <input type="url" id="pageGoogleScriptUrlInput" class="form-control" placeholder="https://script.google.com/macros/s/.../exec" required style="font-family: monospace; font-size: 0.9rem;">
+              <div style="font-size: 0.775rem; color: #64748b; margin-top: 0.35rem;">
+                ใช้สำหรับรับ-ส่งข้อมูลสองทาง (Two-Way Sync) ระหว่าง e-REDT กับ Google Sheets และอัพโหลด PDF ไปยัง Google Drive
+              </div>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 1.25rem;">
+              <label for="pageGoogleDriveFolderInput" style="font-weight: 700;">
+                <i class="fa-solid fa-folder-tree" style="color: #d97706;"></i> Google Drive Target Folder ID <span style="color: #ef4444;">*</span>
+              </label>
+              <input type="text" id="pageGoogleDriveFolderInput" class="form-control" placeholder="เช่น 1l5ZDlXI14lgFc6WGqmZ3kQ9qB-ci-ArM" required style="font-family: monospace; font-size: 0.9rem;">
+              <div style="font-size: 0.775rem; color: #64748b; margin-top: 0.35rem;">
+                ID โฟลเดอร์ใน Google Drive สำหรับจัดเก็บไฟล์คำร้อง PDF ที่พนักงานสอบสวนอัพโหลด
+              </div>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 1.5rem;">
+              <label for="pageGoogleSheetUrlInput" style="font-weight: 700;">
+                <i class="fa-solid fa-table" style="color: #059669;"></i> Google Sheet Published CSV URL (Optional Fallback)
+              </label>
+              <input type="url" id="pageGoogleSheetUrlInput" class="form-control" placeholder="https://docs.google.com/spreadsheets/d/.../gviz/tq?tqx=out:csv" style="font-family: monospace; font-size: 0.9rem;">
+              <div style="font-size: 0.775rem; color: #64748b; margin-top: 0.35rem;">
+                URL สำรองสำหรับการอ่านข้อมูลแบบ Read-Only กรณี Apps Script ขัดข้อง
+              </div>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; border-top: 1px solid #e2e8f0; padding-top: 1.25rem;">
+              <button type="button" onclick="forcePushAllToGoogleSheet()" class="btn-secondary" style="width: auto; background-color: #7c3aed; border-color: #7c3aed; color: #fff;">
+                <i class="fa-solid fa-cloud-arrow-up"></i> ส่งออกข้อมูลทั้งหมดขึ้น Sheet (Force Push)
+              </button>
+
+              <div style="display: flex; gap: 0.5rem;">
+                <button type="button" onclick="testGoogleConnection()" class="btn-secondary" style="width: auto;">
+                  <i class="fa-solid fa-stethoscope"></i> ทดสอบการเชื่อมต่อ
+                </button>
+                <button type="submit" class="btn-primary" style="width: auto; background: linear-gradient(135deg, #1e3a8a, #1d4ed8);">
+                  <i class="fa-solid fa-floppy-disk"></i> บันทึกการตั้งค่า
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+
+        <!-- Sync Diagnostics Panel -->
+        <div class="white-panel" style="padding: 1.5rem;">
+          <h3 style="font-size: 1.1rem; font-weight: 700; margin: 0 0 1rem 0; display: flex; align-items: center; gap: 0.5rem;">
+            <i class="fa-solid fa-database" style="color: #0284c7;"></i> สถานะข้อมูลในแต่ละชีต (Sheet Tabs Diagnostic)
+          </h3>
+          <div class="table-container">
+            <table class="data-table" style="width: 100%;">
+              <thead>
+                <tr>
+                  <th>ชื่อแท็บ (Sheet Tab)</th>
+                  <th>คำอธิบาย</th>
+                  <th style="text-align: center;">จำนวนแถวในเครื่อง (Local Cache)</th>
+                  <th style="text-align: center;">สถานะการซิงค์</th>
+                  <th style="text-align: center;">การดำเนินการ</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><b>requests</b></td>
+                  <td>ข้อมูลคำร้องฝากขังทั้งหมด</td>
+                  <td id="diagRequestsCount" style="text-align: center; font-weight: 700;">0</td>
+                  <td style="text-align: center;"><span class="badge badge-status-uploaded"><i class="fa-solid fa-check"></i> พร้อมใช้งาน</span></td>
+                  <td style="text-align: center;">
+                    <button onclick="fetchLiveGoogleSheetData({ isManual: true })" type="button" class="btn-secondary" style="padding: 0.25rem 0.6rem; font-size: 0.75rem; width: auto;">
+                      <i class="fa-solid fa-rotate"></i> ดึงสด
+                    </button>
+                  </td>
+                </tr>
+                <tr>
+                  <td><b>users</b></td>
+                  <td>บัญชีรายชื่อผู้ใช้งานและรหัสผ่าน</td>
+                  <td id="diagUsersCount" style="text-align: center; font-weight: 700;">0</td>
+                  <td style="text-align: center;"><span class="badge badge-status-uploaded"><i class="fa-solid fa-check"></i> พร้อมใช้งาน</span></td>
+                  <td style="text-align: center;">
+                    <button onclick="fetchLiveGoogleSheetData({ isManual: true })" type="button" class="btn-secondary" style="padding: 0.25rem 0.6rem; font-size: 0.75rem; width: auto;">
+                      <i class="fa-solid fa-rotate"></i> ดึงสด
+                    </button>
+                  </td>
+                </tr>
+                <tr>
+                  <td><b>holidays</b></td>
+                  <td>รายการวันหยุดราชการประจำปี</td>
+                  <td id="diagHolidaysCount" style="text-align: center; font-weight: 700;">0</td>
+                  <td style="text-align: center;"><span class="badge badge-status-uploaded"><i class="fa-solid fa-check"></i> พร้อมใช้งาน</span></td>
+                  <td style="text-align: center;">
+                    <button onclick="fetchLiveGoogleSheetData({ isManual: true })" type="button" class="btn-secondary" style="padding: 0.25rem 0.6rem; font-size: 0.75rem; width: auto;">
+                      <i class="fa-solid fa-rotate"></i> ดึงสด
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- 6. SYSTEM CONFIGURATION GUIDE VIEW (คู่มือการตั้งค่าระบบ) -->
+      <div id="configGuideView" class="animate-fade-in" style="display: none;">
+        <div class="view-header">
+          <div class="view-title">
+            <h2><i class="fa-solid fa-book-bookmark" style="color: #60a5fa;"></i> คู่มือการตั้งค่าและย้ายฐานข้อมูลระบบ e-REDT</h2>
+            <p>คู่มือแนะนำการติดตั้ง Deploy Google Apps Script, การตั้งค่าโฟลเดอร์ Google Drive, และขั้นตอนการโอนย้ายฐานข้อมูล</p>
+          </div>
+          <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            <button onclick="switchView('google_settings', event)" type="button" class="btn-secondary" style="width: auto; background-color: #059669; border-color: #059669; color: #fff;">
+              <i class="fa-solid fa-sliders"></i> ไปยังหน้าตั้งค่าเชื่อมต่อ Google Services
+            </button>
+            <button onclick="copyAppsScriptCode()" type="button" class="btn-primary" style="width: auto; background: linear-gradient(135deg, #0284c7, #0369a1); border-color: #0284c7;">
+              <i class="fa-solid fa-copy"></i> คัดลอกโค้ด Apps Script ทั้งหมด
+            </button>
+          </div>
+        </div>
+
+        <div class="white-panel" style="padding: 1.5rem; margin-bottom: 1.5rem;">
+          <!-- Guide Tab Navigation Bar -->
+          <div class="guide-tab-nav" style="margin-bottom: 1.25rem;">
+            <button type="button" id="tabBtnOverview" onclick="switchConfigGuideTab('overview')" class="guide-tab-btn active">
+              <i class="fa-solid fa-compass"></i> ภาพรวม
+            </button>
+            <button type="button" id="tabBtnScript" onclick="switchConfigGuideTab('script')" class="guide-tab-btn">
+              <i class="fa-solid fa-code"></i> 1. Web App URL
+            </button>
+            <button type="button" id="tabBtnDrive" onclick="switchConfigGuideTab('drive')" class="guide-tab-btn">
+              <i class="fa-solid fa-folder-tree"></i> 2. Folder ID
+            </button>
+            <button type="button" id="tabBtnCsv" onclick="switchConfigGuideTab('csv')" class="guide-tab-btn">
+              <i class="fa-solid fa-table"></i> 3. Published CSV
+            </button>
+            <button type="button" id="tabBtnMigrate" onclick="switchConfigGuideTab('migrate')" class="guide-tab-btn">
+              <i class="fa-solid fa-arrow-right-arrow-left" style="color: #d97706;"></i> 4. ขั้นตอนย้ายระบบ & Drive ใหม่
+            </button>
+            <button type="button" id="tabBtnTemplate" onclick="switchConfigGuideTab('template')" class="guide-tab-btn">
+              <i class="fa-solid fa-file-code"></i> 5. โค้ด Apps Script
+            </button>
+          </div>
+
+          <!-- Tab Content Area -->
+          <div id="guideTabContentContainer" style="padding: 0.25rem;">
+            
+            <!-- TAB 1: OVERVIEW -->
+            <div id="guideTabOverview" class="guide-tab-content">
+              <div style="background: #eff6ff; padding: 1.25rem; border-radius: 0.75rem; border: 1px solid #bfdbfe; margin-bottom: 1.25rem;">
+                <h4 style="margin: 0 0 0.5rem 0; font-weight: 700; color: #1e40af; font-size: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+                  <i class="fa-solid fa-network-wired"></i> สถาปัตยกรรมระบบ e-REDT กับ Google Cloud / Workspace
+                </h4>
+                <p style="font-size: 0.875rem; color: #1e3a8a; margin: 0; line-height: 1.6;">
+                  ระบบ e-REDT ออกแบบให้ทำงานได้โดยตรงกับ Google Services ของศาล โดยใช้ <b>Google Sheet</b> เป็นฐานข้อมูลตาราง (Database) และใช้ <b>Google Drive</b> เป็นที่เก็บไฟล์ PDF เอกสารคำร้อง
+                </p>
+              </div>
+
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+                <div class="guide-step-card" style="border-left: 4px solid #3b82f6;">
+                  <div style="font-weight: 700; color: #1d4ed8; font-size: 0.95rem; margin-bottom: 0.35rem;">
+                    <i class="fa-solid fa-link"></i> Web App URL
+                  </div>
+                  <p style="font-size: 0.825rem; color: #475569; margin: 0; line-height: 1.5;">
+                    Google Apps Script Endpoint ที่ทำหน้าที่รับ-ส่งข้อมูล CRUD คดี และผู้ใช้งานระหว่างเว็บแอปพลิเคชันกับ Google Sheet
+                  </p>
+                </div>
+
+                <div class="guide-step-card" style="border-left: 4px solid #10b981;">
+                  <div style="font-weight: 700; color: #047857; font-size: 0.95rem; margin-bottom: 0.35rem;">
+                    <i class="fa-solid fa-folder-tree"></i> Google Drive Folder ID
+                  </div>
+                  <p style="font-size: 0.825rem; color: #475569; margin: 0; line-height: 1.5;">
+                    รหัสโฟลเดอร์สำหรับอัปโหลดและจัดเก็บไฟล์แนบ PDF คำร้องขอฝากขัง ปลอดภัยด้วยสิทธิการเข้าถึงขององค์กร
+                  </p>
+                </div>
+
+                <div class="guide-step-card" style="border-left: 4px solid #f59e0b;">
+                  <div style="font-weight: 700; color: #b45309; font-size: 0.95rem; margin-bottom: 0.35rem;">
+                    <i class="fa-solid fa-table"></i> Published CSV URL
+                  </div>
+                  <p style="font-size: 0.825rem; color: #475569; margin: 0; line-height: 1.5;">
+                    ลิงก์เผยแพร่ตาราง CSV แบบ Read-Only สำหรับดึงข้อมูลสำรอง (Fallback) กรณี API หลักขัดข้องหรือตอบสนองช้า
+                  </p>
+                </div>
+              </div>
+
+              <div style="display: flex; gap: 0.75rem; justify-content: flex-end; align-items: center; padding-top: 1rem; border-top: 1px dashed #cbd5e1;">
+                <button type="button" onclick="switchView('google_settings', event)" class="btn-primary" style="width: auto;">
+                  <i class="fa-solid fa-sliders"></i> เปิดหน้าแก้ไขการตั้งค่า Google Services ทันที
+                </button>
+              </div>
+            </div>
+
+            <!-- TAB 2: WEB APP URL -->
+            <div id="guideTabScript" class="guide-tab-content" style="display: none;">
+              <h4 style="font-size: 1.05rem; font-weight: 700; color: var(--primary); margin-bottom: 0.75rem;">
+                <i class="fa-solid fa-code" style="color: #3b82f6;"></i> ขั้นตอนการสร้าง Web App URL (Google Apps Script Endpoint)
+              </h4>
+              <p style="font-size: 0.875rem; color: #475569; margin-bottom: 1.25rem;">
+                ทำการสร้าง API Backend บน Google Apps Script เพื่อให้ระบบ e-REDT สามารถอ่าน-เขียนข้อมูลไปยัง Google Sheet ได้อย่างถูกต้อง
+              </p>
+
+              <div class="guide-step-card">
+                <div style="font-weight: 700; margin-bottom: 0.5rem; display: flex; align-items: center;">
+                  <span class="guide-step-number">1</span> เปิด Google Sheet ฐานข้อมูล
+                </div>
+                <p style="font-size: 0.85rem; color: #475569; margin: 0;">
+                  เปิด Google Sheet ที่ต้องการใช้เก็บข้อมูล ต้องสร้างแท็บตารางไว้ 3 แท็บ ได้แก่ <code>users</code> (เก็บข้อมูลบัญชีผู้ใช้), <code>requests</code> (เก็บข้อมูลรายการฝากขัง), และ <code>holidays</code> (เก็บข้อมูลวันหยุด)
+                </p>
+              </div>
+
+              <div class="guide-step-card">
+                <div style="font-weight: 700; margin-bottom: 0.5rem; display: flex; align-items: center;">
+                  <span class="guide-step-number">2</span> เข้าสู่ตัวแก้ไข Apps Script
+                </div>
+                <p style="font-size: 0.85rem; color: #475569; margin: 0;">
+                  คลิกเมนูบาร์ด้านบนเลือก <b>ส่วนขยาย (Extensions)</b> &rarr; <b>Apps Script</b>
+                </p>
+              </div>
+
+              <div class="guide-step-card">
+                <div style="font-weight: 700; margin-bottom: 0.5rem; display: flex; align-items: center; justify-content: space-between;">
+                  <div style="display: flex; align-items: center;">
+                    <span class="guide-step-number">3</span> วางโค้ด backend ประจำระบบ (Code.gs)
+                  </div>
+                  <button type="button" onclick="switchConfigGuideTab('template')" class="btn-secondary" style="width: auto; padding: 0.25rem 0.65rem; font-size: 0.775rem; background: #0284c7; color: #fff; border-color: #0284c7;">
+                    <i class="fa-solid fa-code"></i> เปิดดูและคัดลอกโค้ด Code.gs
+                  </button>
+                </div>
+                <p style="font-size: 0.85rem; color: #475569; margin: 0 0 0.5rem 0;">
+                  คัดลอกโค้ดจากแท็บ <b>"5. โค้ด Apps Script"</b> ในหน้านี้ ไปวางแทนที่เนื้อหาเดิมในสคริปต์ แล้วกด <b>บันทึกโครงการ (Ctrl + S)</b>
+                </p>
+              </div>
+
+              <div class="guide-step-card" style="border: 2px solid #93c5fd; background: #f0f9ff;">
+                <div style="font-weight: 700; margin-bottom: 0.5rem; color: #1e40af; display: flex; align-items: center;">
+                  <span class="guide-step-number" style="background: #2563eb;">4</span> ปรับใช้งานเป็น Web app (Deploy as Web app)
+                </div>
+                <ol style="font-size: 0.85rem; color: #1e3a8a; margin: 0; padding-left: 1.25rem; line-height: 1.6;">
+                  <li>กดปุ่ม <b>ปรับใช้งาน (Deploy)</b> มุมขวาบน &rarr; เลือก <b>การปรับใช้งานใหม่ (New deployment)</b></li>
+                  <li>คลิกรูปไอคอนเฟืองข้าง "เลือกประเภท" &rarr; เลือก <b>เว็บแอป (Web app)</b></li>
+                  <li><b>รายละเอียด (Description):</b> ใส่ชื่อเวอร์ชัน เช่น <code>e-REDT API v2.0</code></li>
+                  <li><b>เรียกใช้ในฐานะ (Execute as):</b> เลือก <b>ฉัน (Me - บัญชีของคุณ)</b></li>
+                  <li><b style="color: #dc2626;">ผู้มีสิทธิ์เข้าถึง (Who has access):</b> เลือก <b>ทุกคน (Anyone)</b> <span class="guide-badge-pill" style="background: #fef2f2; color: #dc2626; border-color: #fca5a5;">สำคัญมาก</span></li>
+                </ol>
+              </div>
+
+              <div class="guide-step-card">
+                <div style="font-weight: 700; margin-bottom: 0.5rem; display: flex; align-items: center;">
+                  <span class="guide-step-number">5</span> อนุมัติสิทธิ์และคัดลอก URL
+                </div>
+                <p style="font-size: 0.85rem; color: #475569; margin: 0 0 0.5rem 0;">
+                  กดปุ่ม <b>ปรับใช้งาน (Deploy)</b> &rarr; กดอนุมัติสิทธิ์ (Review permissions) &rarr; คัดลอกข้อความในช่อง <b>URL เว็บแอป (Web App URL)</b> ที่ลงท้ายด้วย <code>/exec</code>
+                </p>
+                <div class="guide-code-block">
+                  https://script.google.com/macros/s/AKfycb.../exec
+                </div>
+              </div>
+            </div>
+
+            <!-- TAB 3: GOOGLE DRIVE FOLDER ID -->
+            <div id="guideTabDrive" class="guide-tab-content" style="display: none;">
+              <h4 style="font-size: 1.05rem; font-weight: 700; color: var(--primary); margin-bottom: 0.75rem;">
+                <i class="fa-solid fa-folder-tree" style="color: #10b981;"></i> ขั้นตอนการหา Google Drive Target Folder ID
+              </h4>
+              <p style="font-size: 0.875rem; color: #475569; margin-bottom: 1.25rem;">
+                กำหนดโฟลเดอร์สำหรับจัดเก็บไฟล์ PDF คำร้องขอฝากขังที่พนักงานสอบสวนหรือศาลแนบในระบบ
+              </p>
+
+              <div class="guide-step-card">
+                <div style="font-weight: 700; margin-bottom: 0.5rem; display: flex; align-items: center;">
+                  <span class="guide-step-number" style="background: #059669;">1</span> สร้างโฟลเดอร์ใน Google Drive
+                </div>
+                <p style="font-size: 0.85rem; color: #475569; margin: 0;">
+                  เปิด <a href="https://drive.google.com" target="_blank" style="color: #0284c7; text-decoration: underline;">Google Drive</a> &rarr; กดปุ่ม <b>+ ใหม่ (+ New)</b> &rarr; เลือก <b>โฟลเดอร์ใหม่ (New folder)</b> &rarr; ตั้งชื่อเช่น <code>eREDT_PDF_Storage</code>
+                </p>
+              </div>
+
+              <div class="guide-step-card">
+                <div style="font-weight: 700; margin-bottom: 0.5rem; display: flex; align-items: center;">
+                  <span class="guide-step-number" style="background: #059669;">2</span> ตั้งค่าสิทธิ์การเข้าถึงโฟลเดอร์ (General Access)
+                </div>
+                <p style="font-size: 0.85rem; color: #475569; margin: 0 0 0.5rem 0;">
+                  คลิกขวาที่โฟลเดอร์ &rarr; เลือก <b>แชร์ (Share)</b> &rarr; ในหัวข้อ "การเข้าถึงทั่วไป (General access)" ปรับจาก *จำกัด (Restricted)* เป็น <b>ทุกคนที่มีลิงก์ (Anyone with the link)</b>
+                </p>
+                <div style="font-size: 0.8rem; color: #047857; background: #ecfdf5; padding: 0.5rem 0.75rem; border-radius: 0.5rem; border: 1px solid #a7f3d0;">
+                  <i class="fa-solid fa-shield-halved"></i> <b>ข้อแนะนำ:</b> สามารถตั้งสิทธิ์เป็น "ผู้มีสิทธิ์อ่าน" (Viewer) หรือ "ผู้แก้ไข" (Editor) เพื่อให้ระบบอัปโหลดไฟล์ PDF ได้อย่างราบรื่น
+                </div>
+              </div>
+
+              <div class="guide-step-card">
+                <div style="font-weight: 700; margin-bottom: 0.5rem; display: flex; align-items: center;">
+                  <span class="guide-step-number" style="background: #059669;">3</span> คัดลอก Folder ID จาก URL ในเบราว์เซอร์
+                </div>
+                <p style="font-size: 0.85rem; color: #475569; margin: 0 0 0.5rem 0;">
+                  ดับเบิลคลิกเปิดเข้าไปในโฟลเดอร์ สังเกตแถบ URL ด้านบนเบราว์เซอร์ จะมีรูปแบบดังนี้:
+                </p>
+                <div class="guide-code-block">
+                  https://drive.google.com/drive/folders/<span style="color: #facc15; font-weight: bold; text-decoration: underline;">1l5ZDlXI14lgFc6WGqmZ3kQ9qB-ci-ArM</span>
+                </div>
+                <p style="font-size: 0.825rem; color: #64748b; margin: 0.5rem 0 0 0;">
+                  คัดลอกเฉพาะข้อความรหัสส่วนสีเหลืองที่อยู่หลัง <code>/folders/</code> ก็นำมาใช้เป็น Folder ID ได้ทันที
+                </p>
+              </div>
+            </div>
+
+            <!-- TAB 4: PUBLISHED CSV URL -->
+            <div id="guideTabCsv" class="guide-tab-content" style="display: none;">
+              <h4 style="font-size: 1.05rem; font-weight: 700; color: var(--primary); margin-bottom: 0.75rem;">
+                <i class="fa-solid fa-table" style="color: #d97706;"></i> ขั้นตอนการสร้าง Published CSV URL (Optional Fallback)
+              </h4>
+              <p style="font-size: 0.875rem; color: #475569; margin-bottom: 1.25rem;">
+                ใช้เป็นระบบดึงข้อมูลสำรองแบบความเร็วสูงกรณี Web App API ตอบสนองช้า
+              </p>
+
+              <div class="guide-step-card">
+                <div style="font-weight: 700; margin-bottom: 0.5rem; display: flex; align-items: center;">
+                  <span class="guide-step-number" style="background: #d97706;">1</span> เปิดเมนูเผยแพร่ไปยังเว็บ
+                </div>
+                <p style="font-size: 0.85rem; color: #475569; margin: 0;">
+                  ในหน้า Google Sheet ฐานข้อมูล ไปที่เมนู <b>ไฟล์ (File)</b> &rarr; <b>แชร์ (Share)</b> &rarr; <b>เผยแพร่ไปยังเว็บ (Publish to web)</b>
+                </p>
+              </div>
+
+              <div class="guide-step-card">
+                <div style="font-weight: 700; margin-bottom: 0.5rem; display: flex; align-items: center;">
+                  <span class="guide-step-number" style="background: #d97706;">2</span> เลือกรูปแบบเป็น CSV (.csv)
+                </div>
+                <p style="font-size: 0.85rem; color: #475569; margin: 0;">
+                  ในช่องเลือกแท็บตาราง เลือกแท็บ <code>data</code> หรือทั้งเอกสาร แล้วเปลี่ยนรูปแบบจาก *หน้าเว็บ (Web page)* เป็น <b>ค่าที่คั่นด้วยคอมมา (.csv)</b>
+                </p>
+              </div>
+
+              <div class="guide-step-card">
+                <div style="font-weight: 700; margin-bottom: 0.5rem; display: flex; align-items: center;">
+                  <span class="guide-step-number" style="background: #d97706;">3</span> กดเผยแพร่และคัดลอก URL
+                </div>
+                <p style="font-size: 0.85rem; color: #475569; margin: 0 0 0.5rem 0;">
+                  กดปุ่ม <b>เผยแพร่ (Publish)</b> แล้วคัดลอกลิงก์ CSV ที่ได้
+                </p>
+                <div class="guide-code-block">
+                  https://docs.google.com/spreadsheets/d/e/.../pub?output=csv
+                </div>
+              </div>
+            </div>
+
+            <!-- TAB 5: MIGRATION GUIDE -->
+            <div id="guideTabMigrate" class="guide-tab-content" style="display: none;">
+              <div style="background: #fffbebfb; padding: 1rem; border-radius: 0.75rem; border: 1px solid #fde68a; margin-bottom: 1.25rem;">
+                <h4 style="margin: 0 0 0.4rem 0; font-weight: 700; color: #92400e; font-size: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+                  <i class="fa-solid fa-triangle-exclamation" style="color: #d97706;"></i> ขั้นตอนการย้ายระบบและฐานข้อมูลไปยัง Google Account / Drive ใหม่
+                </h4>
+                <p style="font-size: 0.85rem; color: #78350f; margin: 0; line-height: 1.5;">
+                  คำแนะนำทีละขั้นตอนเมื่อต้องย้ายการบันทึกข้อมูล e-REDT ไปยัง Google Account อื่น หรือย้ายไปใช้ Google Sheet / Drive ใหม่ของศาล
+                </p>
+              </div>
+
+              <div class="guide-step-card" style="border-left: 4px solid #3b82f6;">
+                <div style="font-weight: 700; color: #1e40af; margin-bottom: 0.4rem;">
+                  ขั้นตอนที่ 1: เตรียม Google Sheet ฐานข้อมูลใหม่
+                </div>
+                <ul style="font-size: 0.85rem; color: #334155; margin: 0; padding-left: 1.25rem; line-height: 1.6;">
+                  <li>ล็อกอิน Google Account ใหม่ &rarr; ไปที่ Google Drive ใหม่</li>
+                  <li>สร้าง Google Sheet ใหม่ขึ้นมา (หรือทำสำเนาจากไฟล์เดิม)</li>
+                  <li>สร้าง 3 แท็บชื่อ <code>users</code>, <code>requests</code>, และ <code>holidays</code></li>
+                  <li>ในแท็บ <code>users</code> ให้ใส่แถวแรก (Header): <code>username,name,password,role,station,status</code></li>
+                  <li>ในแท็บ <code>requests</code> ให้ใส่แถวแรก (Header): <code>case_number,station,officer,start_date,cap,period_length,closed,occasions_json,history_json,created_at,notes,updated_at</code></li>
+                  <li>ในแท็บ <code>holidays</code> ให้ใส่แถวแรก (Header): <code>date,name</code></li>
+                </ul>
+              </div>
+
+              <div class="guide-step-card" style="border-left: 4px solid #10b981;">
+                <div style="font-weight: 700; color: #047857; margin-bottom: 0.4rem;">
+                  ขั้นตอนที่ 2: ติดตั้งและปรับใช้งาน Web App สคริปต์ใหม่
+                </div>
+                <ul style="font-size: 0.85rem; color: #334155; margin: 0; padding-left: 1.25rem; line-height: 1.6;">
+                  <li>ใน Google Sheet ใหม่ คลิก <b>ส่วนขยาย &rarr; Apps Script</b></li>
+                  <li>วางโค้ด Apps Script (จากแท็บ "5. โค้ด Apps Script")</li>
+                  <li>กด <b>ปรับใช้งาน &rarr; การปรับใช้งานใหม่</b></li>
+                  <li>เลือกชนิดเป็น <b>Web app</b> | ตั้งค่า <code>Execute as: Me</code> | <code>Who has access: Anyone</code></li>
+                  <li>คัดลอก <b>Web App URL ใหม่</b></li>
+                </ul>
+              </div>
+
+              <div class="guide-step-card" style="border-left: 4px solid #8b5cf6;">
+                <div style="font-weight: 700; color: #6d28d9; margin-bottom: 0.4rem;">
+                  ขั้นตอนที่ 3: สร้างโฟลเดอร์ Google Drive สำหรับเก็บ PDF ในบัญชีใหม่
+                </div>
+                <ul style="font-size: 0.85rem; color: #334155; margin: 0; padding-left: 1.25rem; line-height: 1.6;">
+                  <li>สร้างโฟลเดอร์ใหม่ใน Google Drive บัญชีใหม่</li>
+                  <li>ตั้งค่าการแชร์เป็น <b>"ทุกคนที่มีลิงก์" (Anyone with the link)</b></li>
+                  <li>คัดลอกข้อความ <b>Folder ID</b> จาก URL เบราว์เซอร์</li>
+                </ul>
+              </div>
+
+              <div class="guide-step-card" style="border-left: 4px solid #f59e0b;">
+                <div style="font-weight: 700; color: #b45309; margin-bottom: 0.4rem;">
+                  ขั้นตอนที่ 4: เผยแพร่ Published CSV URL จาก Sheet ใหม่
+                </div>
+                <ul style="font-size: 0.85rem; color: #334155; margin: 0; padding-left: 1.25rem; line-height: 1.6;">
+                  <li>ใน Google Sheet ใหม่ ไปที่ <b>ไฟล์ &rarr; แชร์ &rarr; เผยแพร่ไปยังเว็บ</b></li>
+                  <li>เลือกแท็บ <code>data</code> รูปแบบ <b>ค่าที่คั่นด้วยคอมมา (.csv)</b></li>
+                  <li>กดเผยแพร่ และคัดลอก <b>CSV URL ใหม่</b></li>
+                </ul>
+              </div>
+
+              <div class="guide-step-card" style="border-left: 4px solid #06b6d4; background: #ecfeff;">
+                <div style="font-weight: 700; color: #0e7490; margin-bottom: 0.4rem;">
+                  ขั้นตอนที่ 5: อัปเดตการตั้งค่าในระบบ e-REDT และทดสอบการซิงค์
+                </div>
+                <ol style="font-size: 0.85rem; color: #155e75; margin: 0; padding-left: 1.25rem; line-height: 1.6;">
+                  <li>เข้าสู่ระบบ e-REDT ในสิทธิ์ผู้ดูแลระบบ (Admin)</li>
+                  <li>คลิกเมนู <b>"จัดการเชื่อมต่อ Google Services"</b></li>
+                  <li>กรอก <b>Web App URL</b>, <b>Folder ID</b>, และ <b>CSV URL</b> อันใหม่ลงในช่อง</li>
+                  <li>กด <b>บันทึกการตั้งค่า</b></li>
+                  <li>กดปุ่ม <b>"ทดสอบการเชื่อมต่อ API"</b> หรือ <b>"ส่งออกข้อมูลทั้งหมดขึ้น Sheet (Force Push)"</b> เพื่อซิงค์ข้อมูลทั้งหมดไปยังฐานข้อมูลใหม่อย่างสมบูรณ์</li>
+                </ol>
+              </div>
+            </div>
+
+            <!-- TAB 6: APPS SCRIPT CODE TEMPLATE -->
+            <div id="guideTabTemplate" class="guide-tab-content" style="display: none;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
+                <h4 style="font-size: 1.05rem; font-weight: 700; color: var(--primary); margin: 0;">
+                  <i class="fa-solid fa-code"></i> โค้ด Google Apps Script Backend (Code.gs)
+                </h4>
+                <button type="button" onclick="copyAppsScriptCode()" class="btn-secondary" style="width: auto; padding: 0.3rem 0.75rem; font-size: 0.8rem; background: #0284c7; color: #fff; border-color: #0284c7;">
+                  <i class="fa-solid fa-copy"></i> คัดลอกโค้ดทั้งหมด
+                </button>
+              </div>
+              <p style="font-size: 0.825rem; color: #64748b; margin-bottom: 0.75rem;">
+                นำโค้ดนี้ไปวางในหน้า <code>Apps Script (Code.gs)</code> ของ Google Sheet ฐานข้อมูล
+              </p>
+
+              <pre id="appsScriptCodeTemplate" class="guide-code-block" style="max-height: 480px; overflow-y: auto; font-size: 0.8rem;">
+/**
+ * e-REDT System - Google Apps Script Web App Backend
+ * Compatible with e-REDT Court & Police Portal v2.0+
+ */
+
+function doGet(e) {
+  var action = (e && e.parameter && e.parameter.action) ? e.parameter.action : 'getRequests';
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  try {
+    if (action === 'getRequests') {
+      var sheet = ss.getSheetByName('requests') || ss.getSheetByName('data');
+      if (!sheet) return responseJSON([]);
+      var values = sheet.getDataRange().getValues();
+      if (values.length <= 1) return responseJSON([]);
+      var headers = values[0];
+      var result = [];
+      for (var i = 1; i < values.length; i++) {
+        var row = values[i];
+        if (!row[0]) continue;
+        var obj = {};
+        for (var j = 0; j < headers.length; j++) {
+          obj[headers[j]] = row[j];
+        }
+        result.push(obj);
+      }
+      return responseJSON(result);
+    } else if (action === 'getUsers') {
+      var sheet = ss.getSheetByName('users');
+      if (!sheet) return responseJSON([]);
+      var values = sheet.getDataRange().getValues();
+      if (values.length <= 1) return responseJSON([]);
+      var headers = values[0];
+      var result = [];
+      for (var i = 1; i < values.length; i++) {
+        var row = values[i];
+        if (!row[0]) continue;
+        var obj = {};
+        for (var j = 0; j < headers.length; j++) {
+          obj[headers[j]] = row[j];
+        }
+        result.push(obj);
+      }
+      return responseJSON(result);
+    } else if (action === 'getHolidays') {
+      var sheet = ss.getSheetByName('holidays');
+      if (!sheet) return responseJSON([]);
+      var values = sheet.getDataRange().getValues();
+      if (values.length <= 1) return responseJSON([]);
+      var result = [];
+      for (var i = 1; i < values.length; i++) {
+        var row = values[i];
+        if (!row[0]) continue;
+        var dStr = formatDateString(row[0]);
+        if (dStr) {
+          result.push({ date: dStr, name: String(row[1] || '') });
+        }
+      }
+      return responseJSON(result);
+    }
+    return responseJSON({ status: 'ok', message: 'e-REDT Apps Script Ready' });
+  } catch (err) {
+    return responseJSON({ status: 'error', message: err.toString() });
+  }
+}
+
+function doPost(e) {
+  try {
+    var data = JSON.parse(e.postData.contents);
+    var action = data.action;
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+
+    if (action === 'syncRequests') {
+      var sheet = ss.getSheetByName('requests') || ss.getSheetByName('data');
+      if (!sheet) sheet = ss.insertSheet('requests');
+      sheet.clearContents();
+      var headers = ['case_number','station','officer','start_date','cap','period_length','closed','occasions_json','history_json','created_at','notes','updated_at'];
+      sheet.appendRow(headers);
+      var rows = (data.requests || []).map(function(c) {
+        return [
+          c.caseNumber || '',
+          c.station || '',
+          c.officer || '',
+          c.startDate || '',
+          c.cap || 84,
+          c.periodLength || 12,
+          c.closed ? 'TRUE' : 'FALSE',
+          JSON.stringify(c.occasions || []),
+          JSON.stringify(c.history || []),
+          c.createdAt || '',
+          c.notes || '',
+          new Date().toISOString()
+        ];
+      });
+      if (rows.length > 0) {
+        sheet.getRange(2, 1, rows.length, headers.length).setValues(rows);
+      }
+      return responseJSON({ status: 'success', count: rows.length });
+    } else if (action === 'syncUsers') {
+      var sheet = ss.getSheetByName('users');
+      if (!sheet) sheet = ss.insertSheet('users');
+      sheet.clearContents();
+      var headers = ['username','name','password','role','station','status'];
+      sheet.appendRow(headers);
+      var rows = (data.users || []).map(function(u) {
+        return [u.username || '', u.name || '', u.password || '', u.role || 'officer', u.station || '', u.status || 'approved'];
+      });
+      if (rows.length > 0) {
+        sheet.getRange(2, 1, rows.length, headers.length).setValues(rows);
+      }
+      return responseJSON({ status: 'success', count: rows.length });
+    } else if (action === 'syncHolidays') {
+      var sheet = ss.getSheetByName('holidays');
+      if (!sheet) sheet = ss.insertSheet('holidays');
+      sheet.clearContents();
+      var headers = ['date','name'];
+      sheet.appendRow(headers);
+      var rows = (data.holidays || []).map(function(h) {
+        return [h.date || '', h.name || ''];
+      });
+      if (rows.length > 0) {
+        sheet.getRange(2, 1, rows.length, headers.length).setValues(rows);
+      }
+      return responseJSON({ status: 'success', count: rows.length });
+    }
+    return responseJSON({ status: 'unknown_action' });
+  } catch (err) {
+    return responseJSON({ status: 'error', message: err.toString() });
+  }
+}
+
+function formatDateString(val) {
+  if (!val) return '';
+  var d = (val instanceof Date) ? val : new Date(val);
+  if (isNaN(d.getTime())) return '';
+  return Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+}
+
+function responseJSON(data) {
+  return ContentService.createTextOutput(JSON.stringify(data))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+</pre>
+            </div>
+
           </div>
         </div>
       </div>
@@ -1763,6 +2541,6 @@ function responseJSON(data) {
   </div>
 
   <!-- System JavaScript -->
-  <script src="app.js?v=2.2.0"></script>
+  <script src="app.js?v=2.7.0"></script>
 </body>
 </html>
