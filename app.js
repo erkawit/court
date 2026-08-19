@@ -535,24 +535,33 @@ const DEFAULT_HOLIDAYS = [
 ];
 
 function initDatabase() {
-  const curUsers = localStorage.getItem('eredt_users');
-  if (!curUsers || curUsers === '[]') {
-    localStorage.setItem('eredt_users', JSON.stringify(DEFAULT_USERS));
+  try {
+    const curUsers = localStorage.getItem('eredt_users');
+    if (!curUsers || curUsers === '[]') {
+      localStorage.setItem('eredt_users', JSON.stringify(DEFAULT_USERS));
+      inMemoryUsers = null; // Invalidate cache so getUsers() reads fresh seeded data
+    }
+    if (!localStorage.getItem('eredt_requests')) {
+      localStorage.setItem('eredt_requests', JSON.stringify([]));
+    }
+    if (!localStorage.getItem('eredt_holidays')) {
+      localStorage.setItem('eredt_holidays', JSON.stringify(DEFAULT_HOLIDAYS));
+    }
+    const curCsv = localStorage.getItem('eredt_google_csv');
+    if (!curCsv || curCsv.includes('1Y-OA9B8cPRwTcILCB9lmLny2GrfcEnNqR5i07lTGDM4')) {
+      localStorage.setItem('eredt_google_csv', DEFAULT_GOOGLE_SHEET_CSV);
+    }
+    if (!localStorage.getItem('eredt_google_script')) {
+      localStorage.setItem('eredt_google_script', DEFAULT_GOOGLE_SCRIPT_WEBAPP);
+    }
+  } catch (e) {
+    console.warn('localStorage unavailable or blocked:', e);
+    // If localStorage is blocked, use DEFAULT_USERS in-memory so login still works
+    if (!inMemoryUsers || inMemoryUsers.length === 0) {
+      inMemoryUsers = [...DEFAULT_USERS];
+    }
   }
-  if (!localStorage.getItem('eredt_requests')) {
-    localStorage.setItem('eredt_requests', JSON.stringify([]));
-  }
-  if (!localStorage.getItem('eredt_holidays')) {
-    localStorage.setItem('eredt_holidays', JSON.stringify(DEFAULT_HOLIDAYS));
-  }
-  const curCsv = localStorage.getItem('eredt_google_csv');
-  if (!curCsv || curCsv.includes('1Y-OA9B8cPRwTcILCB9lmLny2GrfcEnNqR5i07lTGDM4')) {
-    localStorage.setItem('eredt_google_csv', DEFAULT_GOOGLE_SHEET_CSV);
-  }
-  if (!localStorage.getItem('eredt_google_script')) {
-    localStorage.setItem('eredt_google_script', DEFAULT_GOOGLE_SCRIPT_WEBAPP);
-  }
-  initRealtimeChannel();
+  try { initRealtimeChannel(); } catch (e) { console.warn('BroadcastChannel init error:', e); }
 }
 
 function clearMockData() {
@@ -606,9 +615,14 @@ function getUsers() {
   if (inMemoryUsers && Array.isArray(inMemoryUsers) && inMemoryUsers.length > 0) {
     return inMemoryUsers;
   }
-  let users = JSON.parse(localStorage.getItem('eredt_users') || '[]');
-  if (!Array.isArray(users)) {
-    users = [];
+  let users = [];
+  try {
+    users = JSON.parse(localStorage.getItem('eredt_users') || '[]');
+  } catch (e) {
+    console.warn('getUsers: localStorage read error:', e);
+  }
+  if (!Array.isArray(users) || users.length === 0) {
+    users = [...DEFAULT_USERS];
   }
   users = users.filter(u => u && u.username && String(u.username).trim() !== '');
   inMemoryUsers = users;
@@ -976,8 +990,19 @@ function updateTimeWindowBanner() {
 // --------------------------------------------------------------------------
 
 function checkSession() {
-  initDatabase();
-  const savedUser = sessionStorage.getItem('eredt_session');
+  try {
+    initDatabase();
+  } catch (e) {
+    console.warn('initDatabase error:', e);
+  }
+
+  let savedUser = null;
+  try {
+    savedUser = sessionStorage.getItem('eredt_session');
+  } catch (e) {
+    console.warn('sessionStorage read error:', e);
+  }
+
   if (savedUser) {
     try {
       currentUser = JSON.parse(savedUser);
@@ -992,7 +1017,7 @@ function checkSession() {
     renderAppLayout();
   } else {
     currentUser = null;
-    sessionStorage.removeItem('eredt_session');
+    try { sessionStorage.removeItem('eredt_session'); } catch (e) { /* ignore */ }
     showLoginView();
   }
 }
@@ -6010,10 +6035,16 @@ function openMobileUserActionModal(username) {
 // --------------------------------------------------------------------------
 
 function startApp() {
-  checkSession();
-  initThaiDatePickers();
+  try {
+    checkSession();
+  } catch (e) {
+    console.error('checkSession error:', e);
+    // Guarantee login view is visible even if checkSession crashes
+    showLoginView();
+  }
+  try { initThaiDatePickers(); } catch (e) { console.warn('initThaiDatePickers error:', e); }
   // Fetch live Google Sheet data in background on load so mobile and desktop always have latest records & users
-  fetchLiveGoogleSheetData({ isSilent: true });
+  try { fetchLiveGoogleSheetData({ isSilent: true }); } catch (e) { console.warn('fetchLiveGoogleSheetData error:', e); }
 }
 
 if (document.readyState === 'loading') {

@@ -671,17 +671,17 @@ body {
 .form-control {
   width: 100%;
   padding: 0.75rem 1rem;
-  background: var(--input-bg);
-  border: 1px solid var(--card-border);
+  background: #ffffff !important;
+  border: 1.5px solid #cbd5e1 !important;
   border-radius: 0.6rem;
-  color: var(--text-main);
+  color: #0f172a !important;
   font-size: 0.9rem;
   outline: none;
   transition: all 0.2s;
 }
 
 .form-control:focus {
-  border-color: var(--primary);
+  border-color: var(--primary) !important;
   box-shadow: 0 0 0 3px rgba(30, 58, 138, 0.15);
 }
 
@@ -1075,18 +1075,21 @@ table.data-table tr:hover td {
   bottom: 0;
   background: rgba(15, 23, 42, 0.6);
   backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   z-index: 1050;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 1rem;
   opacity: 0;
+  visibility: hidden;
   pointer-events: none;
-  transition: opacity 0.3s ease;
+  transition: opacity 0.25s ease, visibility 0.25s ease;
 }
 
 .modal-overlay.active {
   opacity: 1;
+  visibility: visible;
   pointer-events: auto;
 }
 
