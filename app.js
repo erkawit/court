@@ -299,20 +299,18 @@ function flagWrongFile(rawCase, reason, now = new Date()) {
   if (rawCase.closed) {
     return { case: rawCase, ok: false, reason: "คดีนี้ปิดสำนวนเสร็จสิ้นแล้ว ไม่สามารถส่งคืนคำร้องได้" };
   }
-  if (!rawCase.fileName) {
-    return { case: rawCase, ok: false, reason: "คดีนี้ยังไม่มีไฟล์ที่อัพโหลดไว้ให้ส่งคืน" };
-  }
   if (!reason || !reason.trim()) {
     return { case: rawCase, ok: false, reason: "กรุณาระบุเหตุผลการส่งคืนคำร้อง" };
   }
-  const courtFlag = { reason: reason.trim(), flaggedAt: toISO(now) };
+  const courtFlag = { reason: reason.trim(), flaggedAt: toISO(now), previousFileName: rawCase.fileName || '' };
   const courtReturn = { reason: reason.trim(), returnedAt: toISO(now), by: (typeof currentUser !== 'undefined' && currentUser) ? (currentUser.name || currentUser.username) : 'ศาล' };
   
   const history = rawCase.history ? [...rawCase.history] : [];
   history.push({
     type: 'court_returned',
-    title: 'ศาลส่งคืนคำร้องให้แก้ไข',
+    title: 'ศาลส่งคืนคำร้องให้แก้ไข (ยกเลิกไฟล์แนบเดิม)',
     note: reason.trim(),
+    previousFile: rawCase.fileName || '',
     timestamp: toISO(now),
     by: (typeof currentUser !== 'undefined' && currentUser) ? (currentUser.name || currentUser.username) : 'ศาล'
   });
@@ -320,10 +318,15 @@ function flagWrongFile(rawCase, reason, now = new Date()) {
   return { 
     case: { 
       ...rawCase, 
-      courtFlag, 
-      courtReturn, 
+      fileName: null,       // ยกเลิกไฟล์แนบเดิมในระบบ เพื่อเคลียร์ออกจากตารางอัพโหลดแล้วทันที
+      fileUrl: null,        // เคลียร์ URL ไฟล์
+      fileData: null,       // เคลียร์ข้อมูลไฟล์
+      uploadedAt: null,     // รีเซ็ตเวลาอัพโหลด
       downloaded: false, 
       downloadedAt: '', 
+      downloadedBy: null,
+      courtFlag, 
+      courtReturn, 
       history 
     }, 
     ok: true, 
@@ -354,7 +357,7 @@ function receiveOccasion(rawCase, holidays, newCap = null, actualDays = null, no
   };
   const history = [...(rawCase.history || []), historyEntry];
 
-  const maxK = cap === 12 ? 1 : (cap === 48 ? 4 : (cap === 84 ? 7 : 7));
+  const maxK = Math.max(1, Math.ceil((cap || 84) / 12));
   if (rawCase.k >= maxK) {
     return { ...rawCase, cap, cumulativeDays: newCumulativeDays, closed: true, closedDate: toISO(now), fileName: null, downloaded: false, courtFlag: null, uploadedAt: null, history };
   }
@@ -363,12 +366,12 @@ function receiveOccasion(rawCase, holidays, newCap = null, actualDays = null, no
 
 function updateCap(rawCase, newCap, holidays = null, now = new Date()) {
   const cap = Number(newCap);
-  if (cap !== 12 && cap !== 48 && cap !== 84) {
-    return { case: rawCase, ok: false, reason: "ค่าเพดานฝากขังต้องเป็น 12 วัน, 48 วัน หรือ 84 วันเท่านั้น" };
+  if (isNaN(cap) || cap < 1) {
+    return { case: rawCase, ok: false, reason: "กรุณาระบุจำนวนวันเพดานฝากขังเป็นตัวเลขที่ถูกต้อง (ตั้งแต่ 1 วันขึ้นไป)" };
   }
 
   const hList = holidays || getHolidays();
-  const maxK = cap === 12 ? 1 : (cap === 48 ? 4 : 7);
+  const maxK = Math.max(1, Math.ceil(cap / 12));
 
   // Recalculate cumulative days based on the updated cap and current remand k
   let cumulativeDays = rawCase.cumulativeDays ?? (12 * ((rawCase.k || 2) - 1));
@@ -380,14 +383,14 @@ function updateCap(rawCase, newCap, holidays = null, now = new Date()) {
     isClosed = true;
     if (!closedDate) closedDate = toISO(now);
   } else {
-    // If cap was increased (e.g. from 12 to 48 or 48 to 84) on a closed case, reopen if k < maxK
+    // If cap was increased on a closed case, reopen if k < maxK
     if (rawCase.k < maxK && rawCase.closed) {
       isClosed = false;
       closedDate = null;
     }
   }
 
-  // Recalculate occasion deadlines based on updated cap and cumulative days
+  // Recalculate occasion deadlines based on updated cap and cumulative days (ใช้เกณฑ์ครบยื่น 1 วันทำการล่วงหน้าและตัดเวลา 16.00 น.)
   const { rawDeadline, legalDeadline, filingDeadline, daysAvailable } = computeOccasionDeadlines(rawCase.startDate, cumulativeDays, hList);
 
   const updatedCase = {
@@ -1136,7 +1139,14 @@ function handleLogout() {
 
 function setElementDisplay(id, displayVal) {
   const el = document.getElementById(id);
-  if (el) el.style.display = displayVal;
+  if (el) {
+    el.style.setProperty('display', displayVal, 'important');
+    if (displayVal === 'none') {
+      el.classList.add('hidden');
+    } else {
+      el.classList.remove('hidden');
+    }
+  }
 }
 window.setElementDisplay = setElementDisplay;
 
@@ -2936,7 +2946,7 @@ function renderCourtRowHTML(c) {
     `;
   }
 
-  const capTimes = c.cap === 12 ? 1 : (c.cap === 48 ? 4 : 7);
+  const capTimes = Math.max(1, Math.ceil((c.cap || 84) / 12));
 
   return `
     <td data-order="${c.type || ''}">${typeBadge}</td>
@@ -3708,52 +3718,102 @@ function openEditCapModal(caseNumber) {
   if (!c) return;
 
   const currentCap = c.cap || 84;
-  const currentTimes = currentCap === 12 ? 1 : (currentCap === 48 ? 4 : 7);
+  const currentTimes = Math.max(1, Math.ceil(currentCap / 12));
+  const isCustomCap = ![12, 48, 84].includes(currentCap);
 
-  const optionsHtml = `
-    <option value="12" ${currentCap === 12 ? 'selected' : ''}>12 วัน (ฝากขังครั้งเดียว - สูงสุด 1 ครั้ง ครั้งละ 12 วัน)</option>
-    <option value="48" ${currentCap === 48 ? 'selected' : ''}>48 วัน (คดีทั่วไป - สูงสุด 4 ครั้ง ครั้งละ 12 วัน)</option>
-    <option value="84" ${currentCap === 84 ? 'selected' : ''}>84 วัน (คดีอัตราโทษสูง - สูงสุด 7 ครั้ง ครั้งละ 12 วัน)</option>
+  const htmlContent = `
+    <div style="text-align: left; font-size: 0.9rem; font-family: 'Prompt', 'Sarabun', sans-serif;">
+      <div style="background: #f0f9ff; border: 1.5px solid #bae6fd; border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 1rem; line-height: 1.5;">
+        <div style="font-weight: 700; color: #0369a1; margin-bottom: 0.25rem;">
+          <i class="fa-solid fa-folder-open"></i> เลขคดี: ${c.caseNumber}
+        </div>
+        <div style="font-size: 0.825rem; color: #334155;">
+          สถานะปัจจุบัน: <b>ฝากขังครั้งที่ ${c.k}</b> | เพดานเดิม: <b>${currentCap} วัน (${currentTimes} ครั้ง)</b>
+        </div>
+        <div style="font-size: 0.775rem; color: #0284c7; margin-top: 0.25rem;">
+          <i class="fa-solid fa-calculator"></i> ระบบใช้เกณฑ์คำนวณวันยื่นล่วงหน้า 1 วันทำการและตัดเวลา 16.00 น.
+        </div>
+      </div>
+
+      <div style="margin-bottom: 1rem;">
+        <label style="font-weight: 600; display: block; margin-bottom: 0.35rem; color: #1e293b;">
+          <i class="fa-solid fa-list-check" style="color: #0284c7;"></i> เลือกรูปแบบเพดานฝากขัง:
+        </label>
+        <select id="swalEditCapPreset" class="form-control" style="width: 100%; padding: 0.55rem; border: 1.5px solid #cbd5e1; border-radius: 8px; font-size: 0.9rem;" onchange="
+          const val = this.value;
+          const customBox = document.getElementById('swalCustomCapBox');
+          const customInput = document.getElementById('swalCustomCapInput');
+          if (val === 'custom') {
+            customBox.style.display = 'block';
+            customInput.focus();
+          } else {
+            customBox.style.display = 'none';
+            customInput.value = val;
+          }
+        ">
+          <option value="84" ${currentCap === 84 ? 'selected' : ''}>84 วัน (คดีอัตราโทษสูง - สูงสุด 7 ครั้ง ครั้งละ 12 วัน)</option>
+          <option value="48" ${currentCap === 48 ? 'selected' : ''}>48 วัน (คดีทั่วไป - สูงสุด 4 ครั้ง ครั้งละ 12 วัน)</option>
+          <option value="12" ${currentCap === 12 ? 'selected' : ''}>12 วัน (ฝากขังครั้งเดียว - สูงสุด 1 ครั้ง ครั้งละ 12 วัน)</option>
+          <option value="custom" ${isCustomCap ? 'selected' : ''}>⚙️ ระบุจำนวนวันเพดานฝากขังเอง (กำหนดวันตามคำสั่งศาล)</option>
+        </select>
+      </div>
+
+      <div id="swalCustomCapBox" style="margin-bottom: 1rem; display: ${isCustomCap ? 'block' : 'none'}; background: #fffbeb; border: 1.5px solid #fde68a; border-radius: 8px; padding: 0.75rem 1rem;">
+        <label for="swalCustomCapInput" style="font-weight: 600; display: block; margin-bottom: 0.35rem; color: #92400e;">
+          <i class="fa-solid fa-pen-to-square"></i> ระบุจำนวนวันเพดานฝากขัง (วัน):
+        </label>
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+          <input type="number" id="swalCustomCapInput" class="form-control" value="${currentCap}" min="1" max="365" placeholder="เช่น 24, 36, 60, 72, 90..." style="flex: 1; padding: 0.5rem 0.75rem; font-size: 0.95rem; font-weight: 700; border: 1.5px solid #f59e0b; border-radius: 6px;">
+          <span style="font-weight: 600; color: #475569;">วัน</span>
+        </div>
+        <div style="font-size: 0.75rem; color: #b45309; margin-top: 0.35rem;">
+          * คำนวณจำนวนครั้งสูงสุดตามรอบครั้งละ 12 วันและกำหนดวันยื่นล่วงหน้า 1 วันทำการโดยอัตโนมัติ
+        </div>
+      </div>
+    </div>
   `;
 
   Swal.fire({
-    title: `แก้ไขเพดานฝากขัง: ${c.caseNumber}`,
-    html: `
-      <div style="text-align: left; font-size: 0.9rem;">
-        <p style="margin-bottom: 0.5rem;"><b>สถานะปัจจุบัน:</b> ครั้งที่ ${c.k} | เพดานปัจจุบัน: <b>${currentCap} วัน (${currentTimes} ครั้ง)</b></p>
-        <p style="color: #0284c7; font-size: 0.8rem; margin-bottom: 0.75rem;"><i class="fa-solid fa-calculator"></i> เมื่อปรับเพดานฝากขัง ระบบจะคำนวณวันและกำหนดนัดใหม่ให้โดยอัตโนมัติ</p>
-        <label style="font-weight: 600; display: block; margin-top: 0.5rem; margin-bottom: 0.25rem;">เลือกเพดานฝากขังใหม่ (ขั้นต่ำ 12 วัน):</label>
-        <select id="swalEditCapSelect" class="form-control" style="width: 100%; padding: 0.5rem; border: 1px solid #cbd5e1; border-radius: 0.4rem;">
-          ${optionsHtml}
-        </select>
-      </div>
-    `,
+    title: `<i class="fa-solid fa-sliders" style="color: #0284c7;"></i> กำหนดเพดานฝากขัง`,
+    html: htmlContent,
     showCancelButton: true,
-    confirmButtonText: 'บันทึกและคำนวณวันใหม่',
+    confirmButtonText: '<i class="fa-solid fa-floppy-disk"></i> บันทึกและคำนวณวันใหม่',
     cancelButtonText: 'ยกเลิก',
-    confirmButtonColor: '#1e3a8a',
+    confirmButtonColor: '#0284c7',
+    cancelButtonColor: '#64748b',
+    width: '460px',
     preConfirm: () => {
-      const select = document.getElementById('swalEditCapSelect');
-      return select ? select.value : null;
+      const presetVal = document.getElementById('swalEditCapPreset')?.value;
+      const customInput = document.getElementById('swalCustomCapInput');
+      let targetDays = parseInt(presetVal, 10);
+      if (presetVal === 'custom' || isNaN(targetDays)) {
+        targetDays = parseInt(customInput?.value, 10);
+      }
+      if (isNaN(targetDays) || targetDays <= 0) {
+        Swal.showValidationMessage('กรุณาระบุจำนวนวันเพดานฝากขังเป็นตัวเลขที่มากกว่า 0');
+        return false;
+      }
+      return targetDays;
     }
   }).then((res) => {
     if (res.isConfirmed && res.value) {
-      const newCap = parseInt(res.value, 10);
+      const newCap = res.value;
       const reqIndex = requests.findIndex(r => r.caseNumber === caseNumber);
       if (reqIndex !== -1) {
         const updateRes = updateCap(requests[reqIndex], newCap);
         if (updateRes.ok) {
           requests[reqIndex] = updateRes.case;
           saveRequests(requests);
+          const maxRounds = Math.max(1, Math.ceil(newCap / 12));
           Swal.fire({
             icon: 'success',
             title: 'ปรับเพดานและคำนวณวันใหม่เรียบร้อย',
-            html: `ปรับเพดานเป็น <b>${newCap} วัน</b> และคำนวณกำหนดวันนัดใหม่เรียบร้อยแล้ว`,
-            timer: 1500,
+            html: `ปรับเพดานเป็น <b>${newCap} วัน (สูงสุด ${maxRounds} ครั้ง)</b> และคำนวณกำหนดวันนัดใหม่ (ล่วงหน้า 1 วันทำการ) เรียบร้อยแล้ว`,
+            timer: 2000,
             showConfirmButton: false
           });
           if (typeof currentActiveView !== 'undefined' && currentActiveView === 'dashboard') renderDashboard();
-          else renderCourtView();
+          else renderCourtRequestsTable();
         } else {
           Swal.fire({ icon: 'error', title: 'แก้ไขไม่สำเร็จ', text: updateRes.reason });
         }
@@ -4105,20 +4165,38 @@ function handleConfirmFlagWrongFile(event) {
   }
 
   const targetCase = requests[index];
+  const oldFileUrl = targetCase.fileUrl || '';
+  const oldFileName = targetCase.fileName || '';
 
-  // User requirement confirmation prompt:
-  // "และต้องมีการเตือนหลังจากกดว่า หากยืนยันจะเป็นการส่งแจ้งกลับไปยัง พนักงานสอบสวนที่ทำสำนวนฝากขังเลข(ตามด้วยเลขฝากขังที่กดส่ง) ท่านต้องการยืนยันหรือไม่"
+  // Confirmation prompt with Drive deletion explanation
   Swal.fire({
     title: 'ยืนยันการส่งคืนคำร้อง?',
-    html: `หากยืนยันจะเป็นการส่งแจ้งกลับไปยัง <b>พนักงานสอบสวนที่ทำสำนวนฝากขังเลข ${caseNumber}</b><br><br>ท่านต้องการยืนยันหรือไม่?`,
+    html: `
+      <div style="text-align: left; font-size: 0.925rem; line-height: 1.6; color: #334155;">
+        <div>หากยืนยันจะเป็นการส่งแจ้งกลับไปยัง <b>พนักงานสอบสวนที่ทำสำนวนฝากขังเลข ${caseNumber}</b></div>
+        <div style="margin-top: 0.5rem; background: #fffbeb; border: 1px solid #fcd34d; padding: 0.65rem; border-radius: 6px; font-size: 0.825rem; color: #b45309;">
+          <i class="fa-solid fa-triangle-exclamation"></i> <b>การดำเนินการ:</b> ระบบจะยกเลิกไฟล์แนบเดิมในระบบ และลบไฟล์ดังกล่าวออกจาก Google Drive เพื่อรอให้พนักงานสอบสวนแนบไฟล์ใหม่
+        </div>
+      </div>
+    `,
     icon: 'warning',
     showCancelButton: true,
     confirmButtonColor: '#d97706',
     cancelButtonColor: '#64748b',
-    confirmButtonText: '<i class="fa-solid fa-rotate-left"></i> ยืนยันส่งคืนคำร้อง',
+    confirmButtonText: '<i class="fa-solid fa-rotate-left"></i> ยืนยันส่งคืนและยกเลิกไฟล์',
     cancelButtonText: 'ยกเลิก'
   }).then((result) => {
     if (result.isConfirmed) {
+      // 1. Delete file from Google Drive if exists
+      if (oldFileUrl || oldFileName) {
+        syncToGoogleSheet('deleteFile', {
+          fileUrl: oldFileUrl,
+          fileName: oldFileName,
+          caseNumber: targetCase.caseNumber
+        });
+      }
+
+      // 2. Clear attached file in the case and flag it as returned
       const res = flagWrongFile(targetCase, reason);
       if (res.ok) {
         requests[index] = res.case;
@@ -4136,18 +4214,93 @@ function handleConfirmFlagWrongFile(event) {
         closeModal('flagWrongFileModal');
         Swal.fire({ 
           icon: 'success', 
-          title: 'ส่งคืนคำร้องเรียบร้อยแล้ว', 
-          html: `ระบบได้ส่งแจ้งเตือนส่งคืนคำร้องเลขฝากขัง <b>${caseNumber}</b> ไปยังพนักงานสอบสวนเจ้าของสำนวนเรียบร้อยแล้ว`,
+          title: 'ส่งคืนคำร้องและยกเลิกไฟล์เรียบร้อยแล้ว', 
+          html: `
+            <div style="font-size: 0.9rem; line-height: 1.5; color: #334155;">
+              <div>ระบบได้ส่งคืนคำร้องเลขฝากขัง <b>${caseNumber}</b></div>
+              <div style="font-size: 0.8rem; color: #059669; margin-top: 0.35rem;"><i class="fa-solid fa-circle-check"></i> ยกเลิกไฟล์เดิมและเคลียร์รายการไปยังตาราง "ยังไม่อัพโหลดไฟล์" เรียบร้อยแล้ว</div>
+            </div>
+          `,
           timer: 2500, 
           showConfirmButton: false 
         });
-        renderCourtView();
+        renderCourtRequestsTable();
+        if (typeof currentActiveView !== 'undefined' && currentActiveView === 'dashboard') {
+          renderDashboard();
+        }
       } else {
         Swal.fire({ icon: 'error', title: 'ส่งคืนคำร้องไม่สำเร็จ', text: res.reason });
       }
     }
   });
 }
+window.handleConfirmFlagWrongFile = handleConfirmFlagWrongFile;
+
+function deleteCase(caseNumber) {
+  if (!currentUser) return;
+  const requests = getRequests();
+  const targetCase = requests.find(r => r.caseNumber === caseNumber);
+  if (!targetCase) {
+    Swal.fire({ icon: 'error', title: 'ไม่พบข้อมูลเลขฝากขังนี้' });
+    return;
+  }
+
+  Swal.fire({
+    title: `ยืนยันลบรายการเลขฝากขัง?`,
+    html: `
+      <div style="text-align: left; font-size: 0.925rem; line-height: 1.6; color: #334155;">
+        <div>คุณต้องการลบรายการเลขฝากขัง <b style="color: #dc2626; font-size: 1.05rem;">${caseNumber}</b> ใช่หรือไม่?</div>
+        <div style="margin-top: 0.5rem; background: #fef2f2; border: 1px solid #fecaca; padding: 0.65rem; border-radius: 6px; font-size: 0.825rem; color: #991b1b;">
+          <i class="fa-solid fa-triangle-exclamation"></i> <b>คำเตือน:</b> เมื่อลบแล้ว ข้อมูลจะถูกลบออกจากระบบและ Google Sheet ทันที และหากมีไฟล์แนบใน Google Drive จะถูกลบออกด้วย
+        </div>
+      </div>
+    `,
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#dc2626',
+    cancelButtonColor: '#64748b',
+    confirmButtonText: '<i class="fa-solid fa-trash"></i> ยืนยันลบรายการ',
+    cancelButtonText: 'ยกเลิก'
+  }).then((result) => {
+    if (result.isConfirmed) {
+      const oldFileUrl = targetCase.fileUrl || '';
+      const oldFileName = targetCase.fileName || '';
+
+      // 1. Delete file from Google Drive if exists
+      if (oldFileUrl || oldFileName) {
+        syncToGoogleSheet('deleteFile', {
+          fileUrl: oldFileUrl,
+          fileName: oldFileName,
+          caseNumber: caseNumber
+        });
+      }
+
+      // 2. Remove case from requests array and save (which syncs to Google Sheet)
+      const updatedRequests = requests.filter(r => r.caseNumber !== caseNumber);
+      saveRequests(updatedRequests);
+
+      // 3. Broadcast realtime update
+      broadcastRealtimeUpdate('CASE_DELETED', { caseNumber });
+
+      Swal.fire({
+        icon: 'success',
+        title: 'ลบรายการสำเร็จ',
+        html: `ลบรายการเลขฝากขัง <b>${caseNumber}</b> และไฟล์ใน Google Drive เรียบร้อยแล้ว`,
+        timer: 2000,
+        showConfirmButton: false
+      });
+
+      renderCourtRequestsTable();
+      if (typeof currentActiveView !== 'undefined' && currentActiveView === 'dashboard') {
+        renderDashboard();
+      }
+      if (typeof renderCreateBatchView === 'function') {
+        renderCreateBatchView();
+      }
+    }
+  });
+}
+window.deleteCase = deleteCase;
 
 // --------------------------------------------------------------------------
 // 10. ADMIN CONTROL PANEL & HOLIDAY MANAGER
@@ -6520,6 +6673,17 @@ function openMobileCaseActionModal(caseNumber) {
       actionButtonsHtml += `
         <button onclick="Swal.close(); handleFinishCase('${enriched.caseNumber}');" class="btn-danger" style="width: 100%; background-color: #dc2626; border-color: #dc2626; color: #fff; margin-bottom: 0.5rem;" title="เสร็จสิ้นการฝากขัง (ปิดสำนวน)">
           <i class="fa-solid fa-lock"></i> เสร็จสิ้นการฝากขัง (ปิดสำนวน)
+        </button>
+      `;
+      actionButtonsHtml += `
+        <button onclick="Swal.close(); deleteCase('${enriched.caseNumber}');" class="btn-secondary" style="width: 100%; background-color: #475569; border-color: #475569; color: #fff; margin-bottom: 0.5rem;" title="ลบรายการเลขฝากขังนี้ออกจากระบบและ Google Sheet">
+          <i class="fa-solid fa-trash"></i> ลบรายการเลขฝากขังนี้
+        </button>
+      `;
+    } else {
+      actionButtonsHtml += `
+        <button onclick="Swal.close(); deleteCase('${enriched.caseNumber}');" class="btn-secondary" style="width: 100%; background-color: #475569; border-color: #475569; color: #fff; margin-bottom: 0.5rem;" title="ลบรายการเลขฝากขังนี้ออกจากระบบและ Google Sheet">
+          <i class="fa-solid fa-trash"></i> ลบรายการเลขฝากขังนี้
         </button>
       `;
     }
