@@ -1998,7 +1998,14 @@ function renderPoliceTable() {
 
       let actionButtons = '';
       if (!c.closed) {
-        const isClosedTime = isPast;
+        const isReturnedByCourt = Boolean(
+          (c.courtFlag && c.courtFlag.reason) || 
+          (c.courtReturn && c.courtReturn.reason) || 
+          (Array.isArray(c.history) && c.history.some(h => h.type === 'court_returned'))
+        );
+        const courtReturnReason = (c.courtFlag && c.courtFlag.reason) || (c.courtReturn && c.courtReturn.reason) || '';
+
+        const isClosedTime = !isReturnedByCourt && isPast;
 
         if (c.fileName) {
           // File HAS been uploaded -> Show Preview PDF + re-upload & return
@@ -2008,10 +2015,18 @@ function renderPoliceTable() {
             </button>
           `;
 
-          const canReupload = !isClosedTime && !c.closed;
+          const canReupload = isReturnedByCourt || (!isClosedTime && !c.closed);
+          const reuploadTitle = isReturnedByCourt
+            ? `ศาลส่งคืนคำร้อง: ${courtReturnReason || 'ให้อัพโหลดไฟล์ใหม่'} (อนุญาตให้อัพโหลดไฟล์ทับได้)`
+            : (isClosedTime ? 'เลยเวลา 16.00 น. ไม่สามารถอัพโหลดทับได้' : 'อัพโหลดไฟล์ใหม่ทับของเดิม');
+
+          const btnStyle = isReturnedByCourt
+            ? 'background-color: #d97706 !important; border-color: #d97706 !important; color: #ffffff !important; font-weight: 700;'
+            : (canReupload ? '' : 'opacity: 0.55; cursor: not-allowed; background-color: #94a3b8; border-color: #94a3b8;');
+
           actionButtons += `
-            <button ${canReupload ? `onclick="openUploadModal('${c.caseNumber}')"` : 'disabled'} type="button" class="btn-primary btn-police-upload" style="padding: 0.3rem 0.65rem; font-size: 0.775rem; width: auto; display: inline-flex; align-items: center; gap: 0.3rem; white-space: nowrap; ${canReupload ? '' : 'opacity: 0.55; cursor: not-allowed; background-color: #94a3b8; border-color: #94a3b8;'}" title="${isClosedTime ? 'เลยเวลา 16.00 น. ไม่สามารถอัพโหลดทับได้' : 'อัพโหลดไฟล์ใหม่ทับของเดิม'}">
-              <i class="fa-solid fa-upload"></i> อัพโหลดทับ
+            <button ${canReupload ? `onclick="openUploadModal('${c.caseNumber}')"` : 'disabled'} type="button" class="btn-primary btn-police-upload" style="padding: 0.3rem 0.65rem; font-size: 0.775rem; width: auto; display: inline-flex; align-items: center; gap: 0.3rem; white-space: nowrap; ${btnStyle}" title="${reuploadTitle}">
+              <i class="fa-solid fa-cloud-arrow-up"></i> ${isReturnedByCourt ? 'อัพโหลดทับ (ศาลส่งคืน)' : 'อัพโหลดทับ'}
             </button>
           `;
 
@@ -2023,13 +2038,17 @@ function renderPoliceTable() {
             `;
           }
         } else {
-          // File has NOT been uploaded yet -> Show red warning ONLY if time is closed
-          if (isClosedTime) {
+          // File has NOT been uploaded yet (or was cleared upon return)
+          const canUpload = isReturnedByCourt || !isClosedTime;
+          if (!canUpload) {
             actionButtons += `<span style="font-size: 0.75rem; color: #dc2626; font-weight: 700; white-space: nowrap;"><i class="fa-solid fa-ban"></i> เลย 16.00 น. ยื่นที่ศาลด้วยตนเอง</span>`;
           } else {
+            const btnStyle = isReturnedByCourt
+              ? 'background-color: #d97706 !important; border-color: #d97706 !important; color: #ffffff !important; font-weight: 700;'
+              : '';
             actionButtons += `
-              <button onclick="openUploadModal('${c.caseNumber}')" type="button" class="btn-primary btn-police-upload" style="padding: 0.3rem 0.65rem; font-size: 0.775rem; width: auto; display: inline-flex; align-items: center; gap: 0.3rem; white-space: nowrap;">
-                <i class="fa-solid fa-upload"></i> อัพโหลด PDF
+              <button onclick="openUploadModal('${c.caseNumber}')" type="button" class="btn-primary btn-police-upload" style="padding: 0.3rem 0.65rem; font-size: 0.775rem; width: auto; display: inline-flex; align-items: center; gap: 0.3rem; white-space: nowrap; ${btnStyle}" title="${isReturnedByCourt ? `ศาลส่งคืน: ${courtReturnReason}` : 'อัพโหลด PDF'}">
+                <i class="fa-solid fa-cloud-arrow-up"></i> ${isReturnedByCourt ? 'อัพโหลด PDF ใหม่ (ศาลส่งคืน)' : 'อัพโหลด PDF'}
               </button>
             `;
             if (!c.history || c.history.length === 0) {
