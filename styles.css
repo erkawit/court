@@ -1134,6 +1134,69 @@ table.data-table tr:hover td {
 }
 
 @media (max-width: 768px) {
+  /* 0. Mobile Login Screen Responsive Optimization (< 768px) */
+  .login-wrapper {
+    min-height: 100vh !important;
+    min-height: 100dvh !important;
+    padding: 1.25rem 0.85rem !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background-color: #ffffff !important;
+    width: 100% !important;
+  }
+
+  .login-card {
+    padding: 1.75rem 1.25rem !important;
+    border-radius: 1rem !important;
+    box-shadow: 0 4px 20px rgba(15, 23, 42, 0.08) !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    margin: auto !important;
+    background: #ffffff !important;
+  }
+
+  .login-header {
+    margin-bottom: 1.5rem !important;
+  }
+
+  .login-header img {
+    height: 54px !important;
+    width: auto !important;
+    margin-bottom: 0.75rem !important;
+  }
+
+  .login-header h1 {
+    font-size: 1.35rem !important;
+    line-height: 1.3 !important;
+  }
+
+  .login-header p {
+    font-size: 0.825rem !important;
+    line-height: 1.4 !important;
+  }
+
+  .login-card .form-group {
+    margin-bottom: 1rem !important;
+  }
+
+  .login-card .form-group label {
+    font-size: 0.825rem !important;
+    margin-bottom: 0.35rem !important;
+  }
+
+  .login-card .form-control {
+    padding: 0.75rem 0.85rem !important;
+    font-size: 0.95rem !important;
+    border-radius: 0.5rem !important;
+  }
+
+  .login-card .btn-primary {
+    padding: 0.75rem 1rem !important;
+    font-size: 0.95rem !important;
+    border-radius: 0.5rem !important;
+  }
+
   /* 1. Top Header Modifications for Mobile (< 768px) */
   .sidebar {
     display: none !important; /* Hide desktop top/sidebar menu bar on mobile */

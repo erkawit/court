@@ -988,9 +988,11 @@ function checkSession() {
     currentUser = null;
   }
 
-  if (currentUser) {
+  if (currentUser && currentUser.username && currentUser.role) {
     renderAppLayout();
   } else {
+    currentUser = null;
+    sessionStorage.removeItem('eredt_session');
     showLoginView();
   }
 }
@@ -6007,12 +6009,18 @@ function openMobileUserActionModal(username) {
 // 12. INITIALIZATION ON DOM LOAD
 // --------------------------------------------------------------------------
 
-document.addEventListener('DOMContentLoaded', () => {
+function startApp() {
   checkSession();
   initThaiDatePickers();
   // Fetch live Google Sheet data in background on load so mobile and desktop always have latest records & users
   fetchLiveGoogleSheetData({ isSilent: true });
-});
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', startApp);
+} else {
+  startApp();
+}
 
 
 async function downloadStationBatch(dateStr, stationName) {
