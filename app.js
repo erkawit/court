@@ -513,9 +513,11 @@ function generateICS(cases, calendarName, now = new Date()) {
 // 4. DATA PERSISTENCE & LOCAL STORAGE ENGINE
 // --------------------------------------------------------------------------
 
-// SPEC ข้อ 3: ไม่มีบัญชีตั้งต้นฝังในโค้ด — ใช้ฟอร์ม "ตั้งค่าบัญชีแรกของระบบ" แทน
-// บทบาทในระบบมี 2 ระดับเท่านั้น: officer (เจ้าหน้าที่ศาล) + police (พนักงานสอบสวน)
-const DEFAULT_USERS = [];
+const DEFAULT_USERS = [
+  { username: 'admin', password: 'caogikojt02', role: 'admin', station: '', name: 'ผู้ดูแลระบบสูงสุด (System Admin)', status: 'approved' },
+  { username: 'officer01', password: '123456', role: 'officer', station: '', name: 'เจ้าหน้าที่ศาลจังหวัดอุดรธานี', status: 'approved' },
+  { username: 'head-office01', password: '123456', role: 'officer', station: '', name: 'นายณัฐพงศ์ กุบแก้ว', status: 'approved' }
+];
 
 const DEFAULT_HOLIDAYS = [
   { date: "2026-01-01", name: "วันขึ้นปีใหม่" },
@@ -533,7 +535,8 @@ const DEFAULT_HOLIDAYS = [
 ];
 
 function initDatabase() {
-  if (!localStorage.getItem('eredt_users')) {
+  const curUsers = localStorage.getItem('eredt_users');
+  if (!curUsers || curUsers === '[]') {
     localStorage.setItem('eredt_users', JSON.stringify(DEFAULT_USERS));
   }
   if (!localStorage.getItem('eredt_requests')) {
@@ -1136,7 +1139,6 @@ function showLoginView() {
   setElementDisplay('appHeader', 'none');
   setElementDisplay('appLayoutContainer', 'none');
   
-  // SPEC ข้อ 3: auto-detect ว่ายังไม่มีบัญชีศาลเลย → แสดงฟอร์ม "ตั้งค่าบัญชีแรก"
   const users = getUsers();
   const hasCourtAccount = users.some(u => u.role === 'officer' || u.role === 'admin');
   const firstPanel = document.getElementById('firstAccountSetupPanel');
@@ -1151,6 +1153,21 @@ function showLoginView() {
     }
   }
 }
+
+function toggleFirstSetupPanel(showSetup) {
+  const firstPanel = document.getElementById('firstAccountSetupPanel');
+  const normalPanel = document.getElementById('normalLoginPanel');
+  if (firstPanel && normalPanel) {
+    if (showSetup) {
+      firstPanel.style.display = 'block';
+      normalPanel.style.display = 'none';
+    } else {
+      firstPanel.style.display = 'none';
+      normalPanel.style.display = 'block';
+    }
+  }
+}
+window.toggleFirstSetupPanel = toggleFirstSetupPanel;
 
 function renderAppLayout() {
   if (!currentUser) return;
@@ -5924,6 +5941,11 @@ function openMobileCaseActionModal(caseNumber) {
           </button>
         `;
       }
+      actionButtonsHtml += `
+        <button onclick="Swal.close(); handleFinishCase('${enriched.caseNumber}');" class="btn-danger" style="width: 100%; background-color: #dc2626; border-color: #dc2626; color: #fff; margin-bottom: 0.5rem;" title="เสร็จสิ้นการฝากขัง (ปิดสำนวน)">
+          <i class="fa-solid fa-lock"></i> เสร็จสิ้นการฝากขัง (ปิดสำนวน)
+        </button>
+      `;
     }
   }
 
@@ -5988,6 +6010,8 @@ function openMobileUserActionModal(username) {
 document.addEventListener('DOMContentLoaded', () => {
   checkSession();
   initThaiDatePickers();
+  // Fetch live Google Sheet data in background on load so mobile and desktop always have latest records & users
+  fetchLiveGoogleSheetData({ isSilent: true });
 });
 
 

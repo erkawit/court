@@ -1287,6 +1287,11 @@ function responseJSON(data) {
           <button type="submit" class="btn-primary" style="margin-top: 1rem;">
             <i class="fa-solid fa-user-plus"></i> สร้างบัญชีแรกและเข้าสู่ระบบ
           </button>
+          <div style="margin-top: 0.75rem; text-align: center;">
+            <a href="javascript:void(0)" onclick="toggleFirstSetupPanel(false)" style="color: var(--primary); font-size: 0.85rem; font-weight: 600; text-decoration: underline;">
+              <i class="fa-solid fa-arrow-left"></i> มีบัญชีอยู่แล้ว? เข้าสู่ระบบปกติ
+            </a>
+          </div>
           <div style="margin-top: 0.75rem; padding: 0.75rem; background: #fef3c7; border: 1px solid #fcd34d; border-radius: 0.5rem; font-size: 0.8rem; color: #92400e;">
             <i class="fa-solid fa-triangle-exclamation"></i> <b>คำแนะนำ:</b> หลังจากสร้างบัญชีแรกแล้ว ควรสร้างบัญชีสำรองอย่างน้อย 2 บัญชีทันที เพื่อป้องกันกรณีลืมรหัสผ่าน
           </div>
@@ -1309,6 +1314,11 @@ function responseJSON(data) {
           <button type="submit" class="btn-primary" style="margin-top: 1rem;">
             <i class="fa-solid fa-right-to-bracket"></i> เข้าสู่ระบบเจ้าหน้าที่ศาล
           </button>
+          <div style="margin-top: 0.75rem; text-align: center;">
+            <a href="javascript:void(0)" onclick="toggleFirstSetupPanel(true)" style="color: var(--text-muted); font-size: 0.8rem; text-decoration: underline;">
+              <i class="fa-solid fa-user-gear"></i> ตั้งค่าบัญชีแรกของระบบ
+            </a>
+          </div>
         </form>
       </div>
     </div>
