@@ -284,7 +284,7 @@
 
           <form onsubmit="handleCreateBatch(event)">
             <div class="form-row" style="margin-bottom: 1rem;">
-              <div class="form-group" style="flex: 1.5; min-width: 180px;">
+              <div class="form-group" style="flex: 1.5;">
                 <label for="batchTypeSelect"><i class="fa-solid fa-tag"></i> ประเภท</label>
                 <select id="batchTypeSelect" class="form-control" required>
                   <option value="ยฝ.">ยฝ. (คดียาเสพติด)</option>
@@ -292,17 +292,17 @@
                 </select>
               </div>
 
-              <div class="form-group" style="flex: 1; min-width: 110px;">
+              <div class="form-group" style="flex: 1;">
                 <label for="batchStartNumInput">เลขเริ่ม</label>
                 <input type="number" id="batchStartNumInput" class="form-control" placeholder="1" min="1" required>
               </div>
 
-              <div class="form-group" style="flex: 1; min-width: 110px;">
+              <div class="form-group" style="flex: 1;">
                 <label for="batchEndNumInput">ถึงเลข</label>
                 <input type="number" id="batchEndNumInput" class="form-control" placeholder="50" min="1" required>
               </div>
 
-              <div class="form-group" style="flex: 1; min-width: 110px;">
+              <div class="form-group" style="flex: 1;">
                 <label for="batchYearInput">ปี พ.ศ.</label>
                 <input type="number" id="batchYearInput" class="form-control" value="2569" required>
               </div>
@@ -542,11 +542,11 @@
           </h3>
           <form onsubmit="handleAddHolidayFromPage(event)">
             <div class="form-row">
-              <div class="form-group" style="flex: 1.2; min-width: 200px;">
+              <div class="form-group" style="flex: 1.2;">
                 <label for="pageHolidayDateInput"><i class="fa-solid fa-calendar-day"></i> วันที่หยุด (เลือกจากปฏิทินไทย)</label>
                 <input type="text" id="pageHolidayDateInput" class="form-control thai-datepicker" placeholder="เลือกวันที่หยุด" required>
               </div>
-              <div class="form-group" style="flex: 2; min-width: 250px;">
+              <div class="form-group" style="flex: 2;">
                 <label for="pageHolidayNameInput"><i class="fa-solid fa-tag"></i> ชื่อวันหยุดราชการ</label>
                 <input type="text" id="pageHolidayNameInput" class="form-control" placeholder="เช่น วันเฉลิมพระชนมพรรษา, วันขึ้นปีใหม่, วันสงกรานต์..." required>
               </div>
