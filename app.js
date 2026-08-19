@@ -3633,36 +3633,94 @@ function handleConfirmReceiveOccasion(event) {
 function openFlagModal(caseNumber) {
   setElementValue('flagCaseNumber', caseNumber);
   setElementValue('flagReasonInput', '');
+  
+  const requests = getRequests();
+  const c = requests.find(r => r.caseNumber === caseNumber);
+  const infoEl = document.getElementById('flagCaseInfoDisplay');
+  if (infoEl) {
+    if (c) {
+      infoEl.innerHTML = `
+        <div style="font-weight: 700; font-size: 0.95rem; margin-bottom: 0.25rem;">
+          <i class="fa-solid fa-file-signature" style="color: #d97706;"></i> เลขฝากขัง: <b>${c.caseNumber}</b> (ครั้งที่ ${c.k || 1})
+        </div>
+        <div style="font-size: 0.8rem; color: #78350f;">
+          สถานีตำรวจ: <b>${c.station || 'ยังไม่ระบุ'}</b> | พนักงานสอบสวน: <b>${c.officer || 'ยังไม่มีผู้รับ'}</b>
+        </div>
+        ${c.fileName ? `<div style="font-size: 0.8rem; color: #dc2626; margin-top: 0.25rem;"><i class="fa-solid fa-file-pdf"></i> ไฟล์ปัจจุบัน: ${c.fileName}</div>` : ''}
+      `;
+    } else {
+      infoEl.textContent = `เลขคดี: ${caseNumber}`;
+    }
+  }
+
   openModal('flagWrongFileModal');
 }
 
 function handleConfirmFlagWrongFile(event) {
   event.preventDefault();
   const caseNumber = document.getElementById('flagCaseNumber')?.value || '';
-  const reason = document.getElementById('flagReasonInput')?.value || '';
+  const reason = document.getElementById('flagReasonInput')?.value?.trim() || '';
+
+  if (!reason) {
+    Swal.fire({
+      icon: 'warning',
+      title: 'กรุณาระบุเหตุผลการส่งคืนคำร้อง',
+      text: 'โปรดระบุสาเหตุ เช่น เอกสารไม่ถูกต้อง, ไฟล์เลือนราง หรือลายเซ็นไม่ครบถ้วน เพื่อให้พนักงานสอบสวนแก้ไขได้ถูกต้อง'
+    });
+    return;
+  }
 
   const requests = getRequests();
   const index = requests.findIndex(r => r.caseNumber === caseNumber);
 
-  if (index !== -1) {
-    const result = flagWrongFile(requests[index], reason);
-    if (result.ok) {
-      requests[index] = result.case;
-      saveRequests(requests);
-
-      closeModal('flagWrongFileModal');
-      Swal.fire({ 
-        icon: 'success', 
-        title: 'ส่งคืนคำร้องเรียบร้อยแล้ว', 
-        html: `แจ้งส่งคืนคำร้องเลขคดี <b>${caseNumber}</b> ไปยังพนักงานสอบสวนเจ้าของสำนวนเพื่อเปิดให้อัพโหลดไฟล์ใหม่เรียบร้อยแล้ว`,
-        timer: 2000, 
-        showConfirmButton: false 
-      });
-      renderCourtView();
-    } else {
-      Swal.fire({ icon: 'error', title: 'ส่งคืนคำร้องไม่สำเร็จ', text: result.reason });
-    }
+  if (index === -1) {
+    Swal.fire({ icon: 'error', title: 'ไม่พบข้อมูลคดีนี้ในระบบ' });
+    return;
   }
+
+  const targetCase = requests[index];
+
+  // User requirement confirmation prompt:
+  // "และต้องมีการเตือนหลังจากกดว่า หากยืนยันจะเป็นการส่งแจ้งกลับไปยัง พนักงานสอบสวนที่ทำสำนวนฝากขังเลข(ตามด้วยเลขฝากขังที่กดส่ง) ท่านต้องการยืนยันหรือไม่"
+  Swal.fire({
+    title: 'ยืนยันการส่งคืนคำร้อง?',
+    html: `หากยืนยันจะเป็นการส่งแจ้งกลับไปยัง <b>พนักงานสอบสวนที่ทำสำนวนฝากขังเลข ${caseNumber}</b><br><br>ท่านต้องการยืนยันหรือไม่?`,
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#d97706',
+    cancelButtonColor: '#64748b',
+    confirmButtonText: '<i class="fa-solid fa-rotate-left"></i> ยืนยันส่งคืนคำร้อง',
+    cancelButtonText: 'ยกเลิก'
+  }).then((result) => {
+    if (result.isConfirmed) {
+      const res = flagWrongFile(targetCase, reason);
+      if (res.ok) {
+        requests[index] = res.case;
+        saveRequests(requests);
+
+        // Broadcast realtime notification specifically for this case return
+        broadcastRealtimeUpdate('CASE_RETURNED', {
+          caseNumber: targetCase.caseNumber,
+          reason: reason,
+          officer: targetCase.officer || '',
+          station: targetCase.station || '',
+          k: targetCase.k || 1
+        });
+
+        closeModal('flagWrongFileModal');
+        Swal.fire({ 
+          icon: 'success', 
+          title: 'ส่งคืนคำร้องเรียบร้อยแล้ว', 
+          html: `ระบบได้ส่งแจ้งเตือนส่งคืนคำร้องเลขฝากขัง <b>${caseNumber}</b> ไปยังพนักงานสอบสวนเจ้าของสำนวนเรียบร้อยแล้ว`,
+          timer: 2500, 
+          showConfirmButton: false 
+        });
+        renderCourtView();
+      } else {
+        Swal.fire({ icon: 'error', title: 'ส่งคืนคำร้องไม่สำเร็จ', text: res.reason });
+      }
+    }
+  });
 }
 
 // --------------------------------------------------------------------------
@@ -5951,8 +6009,8 @@ function openMobileCaseActionModal(caseNumber) {
       `;
       if (enriched.fileName) {
         actionButtonsHtml += `
-          <button onclick="Swal.close(); openFlagModal('${enriched.caseNumber}');" class="btn-secondary" style="width: 100%; background-color: #dc2626; border-color: #dc2626; color: #fff; margin-bottom: 0.5rem;">
-            <i class="fa-solid fa-flag"></i> แจ้งไฟล์ผิด
+          <button onclick="Swal.close(); openFlagModal('${enriched.caseNumber}');" class="btn-secondary" style="width: 100%; background-color: #d97706; border-color: #d97706; color: #fff; margin-bottom: 0.5rem;">
+            <i class="fa-solid fa-rotate-left"></i> ส่งคืนคำร้อง (แจ้งไฟล์ผิด/ให้แก้ไข)
           </button>
         `;
       }
