@@ -17,6 +17,7 @@ const SPREADSHEET_ID = '1yoznW_FWEf5BLKOdqn110oTZj5zJg4KbsKsogoh-6g4';
 const DEFAULT_GOOGLE_SHEET_CSV = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/pub?output=csv`;
 const DEFAULT_GOOGLE_SCRIPT_WEBAPP = '';
 const DEFAULT_DRIVE_FOLDER_ID = '1l5ZDlXI14lgFc6WGqmZ3kQ9qB-ci-ArM';
+const EREDT_API_KEY = 'eredt-udon-2569';
 
 // --------------------------------------------------------------------------
 // 1. LEGAL LOGIC ENGINE (ตรรกะกฎหมาย และระเบียบศาลจังหวัดอุดรธานี พ.ศ. 2569)
@@ -264,6 +265,7 @@ function enrichCase(rawCase, holidays, now = new Date()) {
 
 function deriveStatus(enrichedCase, now = new Date()) {
   if (enrichedCase.closed) return "closed";
+  if (enrichedCase.courtFlag) return "returned";
   if (enrichedCase.fileExpired) return "file_expired";
   if (enrichedCase.fileName && enrichedCase.downloaded) return "downloaded";
   if (enrichedCase.fileName) return "uploaded";
@@ -771,7 +773,7 @@ function syncToGoogleSheet(actionName, payload) {
   if (!scriptUrl) return;
   
   try {
-    fetch(scriptUrl, {
+    fetch(scriptUrl + '?key=' + EREDT_API_KEY, {
       method: 'POST',
       mode: 'no-cors',
       headers: { 'Content-Type': 'application/json' },
@@ -1061,7 +1063,7 @@ async function handleLogin(event) {
 
       if (scriptUrl && scriptUrl.trim() !== '') {
         try {
-          const res = await fetch(`${scriptUrl}?action=getUsers`);
+          const res = await fetch(`${scriptUrl}?key=${EREDT_API_KEY}&action=getUsers`);
           liveUsers = await res.json();
         } catch (e) {
           console.warn('Login live check Apps Script error:', e);
@@ -1093,6 +1095,23 @@ async function handleLogin(event) {
         icon: 'warning',
         title: 'บัญชีผู้ใช้ยังไม่ได้รับอนุมัติ',
         text: 'บัญชีของคุณอยู่ระหว่างการรออนุมัติสิทธิจากผู้ดูแลระบบ'
+      });
+      return;
+    }
+
+    // ตรวจสอบ role — ป้องกัน Cross-role Login Crash
+    if (user.role === 'police') {
+      Swal.fire({
+        icon: 'warning',
+        title: 'บัญชีนี้เป็นพนักงานสอบสวน',
+        html: `<p>บัญชี <b>${user.username}</b> มีสิทธิ์เป็น <b>พนักงานสอบสวน</b></p><p>กรุณาเข้าสู่ระบบผ่าน <a href="../police/index.html" style="color: #dc2626; font-weight: 700;">ระบบพนักงานสอบสวน</a> แทน</p>`,
+        confirmButtonText: 'ไปหน้าระบบตำรวจ',
+        showCancelButton: true,
+        cancelButtonText: 'ปิด'
+      }).then(result => {
+        if (result.isConfirmed) {
+          window.location.href = '../police/index.html';
+        }
       });
       return;
     }
@@ -1239,6 +1258,8 @@ function renderAppLayout() {
   // Setup Sidebar Menus based on Role
   setElementDisplay('navCategoryCourt', isCourt ? 'block' : 'none');
   setElementDisplay('navItemCreateBatch', isCourt ? 'block' : 'none');
+  setElementDisplay('navItemDownloadHistory', isCourt ? 'block' : 'none');
+  setElementDisplay('navItemReturnHistory', isCourt ? 'block' : 'none');
   setElementDisplay('navItemHolidays', isCourt ? 'block' : 'none');
 
   setElementDisplay('navCategoryPolice', isPolice ? 'block' : 'none');
@@ -1317,6 +1338,8 @@ function switchView(viewName, event, subTab) {
   setElementDisplay('dashboardView', 'none');
   setElementDisplay('createBatchView', 'none');
   setElementDisplay('requestsView', 'none');
+  setElementDisplay('downloadsView', 'none');
+  setElementDisplay('returnsView', 'none');
   setElementDisplay('adminView', 'none');
   setElementDisplay('holidaysView', 'none');
   setElementDisplay('googleSettingsView', 'none');
@@ -1428,6 +1451,16 @@ function switchView(viewName, event, subTab) {
     setElementClass('navItemDownloadHistoryLink', 'active', true);
     setElementClass('mbNavDownloads', 'active', true);
     renderDownloadHistoryTable();
+  } else if (viewName === 'returns') {
+    const isCourt = currentUser && (currentUser.role === 'officer' || currentUser.role === 'admin');
+    if (!isCourt) {
+      switchView('dashboard');
+      return;
+    }
+    setElementDisplay('returnsView', 'block');
+    setElementClass('navItemReturnHistory', 'active', true);
+    setElementClass('navItemReturnHistoryLink', 'active', true);
+    renderReturnHistoryTable();
   } else if (viewName === 'holidays') {
     const isCourt = currentUser && (currentUser.role === 'officer' || currentUser.role === 'admin');
     if (!isCourt) {
@@ -1557,8 +1590,8 @@ function checkPendingCourtDownloadsAlert() {
   const holidays = getHolidays();
   const enriched = rawRequests.map(r => enrichCase(r, holidays));
 
-  // ค้นหารายการคำร้องที่มีไฟล์อัพโหลดเข้ามาแล้ว และศาลยังไม่ได้ดาวน์โหลด (!c.downloaded && c.fileName && !c.closed)
-  const pendingFiles = enriched.filter(c => !c.closed && c.fileName && !c.downloaded);
+  // ค้นหารายการคำร้องที่มีไฟล์อัพโหลดเข้ามาแล้ว ศาลยังไม่ได้ดาวน์โหลด และไม่มีการส่งคืน (!c.downloaded && c.fileName && !c.closed && !c.courtFlag)
+  const pendingFiles = enriched.filter(c => !c.closed && Boolean(c.fileName) && !c.downloaded && !c.courtFlag);
   if (pendingFiles.length === 0) return;
 
   let listHtml = pendingFiles.map(c => {
@@ -2353,7 +2386,7 @@ function handleCreateRequest(event) {
     reader.onload = function(e) {
       const base64Data = e.target.result;
       
-      fetch(scriptUrl, {
+      fetch(scriptUrl + '?key=' + EREDT_API_KEY, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain' },
         body: JSON.stringify({
@@ -2913,8 +2946,25 @@ function renderCourtRowHTML(c) {
     `;
   }
 
+  let courtFlagBadge = '';
+  if (c.courtFlag) {
+    let flagTimeStr = '';
+    if (c.courtFlag.flaggedAt) {
+      const fDate = new Date(c.courtFlag.flaggedAt);
+      flagTimeStr = `${formatThaiDate(c.courtFlag.flaggedAt)} ${fDate.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })} น.`;
+    }
+    courtFlagBadge = `
+      <div style="background: #fffbeb; border: 1px solid #fcd34d; border-radius: 4px; padding: 0.25rem 0.45rem; margin-top: 0.25rem; font-size: 0.725rem; color: #78350f; line-height: 1.35;">
+        <div style="font-weight: 700; color: #b45309;"><i class="fa-solid fa-rotate-left"></i> ศาลส่งคืนเมื่อ: ${flagTimeStr || 'ส่งคืนแล้ว'}</div>
+        <div style="margin-top: 0.1rem;"><b>เหตุผล:</b> ${c.courtFlag.reason || 'เอกสารไม่ถูกต้อง'}</div>
+      </div>
+    `;
+  }
+
   let fileCell = '<span style="color: var(--text-muted); font-size: 0.8rem; white-space: nowrap;">ยังไม่อัพโหลด</span>';
-  if (c.fileName) {
+  if (c.courtFlag) {
+    fileCell = '<span style="color: #b45309; font-size: 0.8rem; font-weight: 600; white-space: nowrap;"><i class="fa-solid fa-rotate-left"></i> ยกเลิกไฟล์เดิม (ส่งคืน)</span>';
+  } else if (c.fileName) {
     let downloadInfo = '';
     if (c.downloaded && c.downloadedAt) {
       const dlDate = new Date(c.downloadedAt);
@@ -2939,7 +2989,7 @@ function renderCourtRowHTML(c) {
         <i class="fa-solid fa-check-double"></i> ยืนยันรับเรื่อง
       </button>
     `;
-    if (c.fileName) {
+    if (c.fileName && !c.courtFlag) {
       courtActions += `
         <button onclick="openFlagModal('${c.caseNumber}')" class="btn-secondary" style="padding: 0.25rem 0.55rem; font-size: 0.75rem; width: auto; background-color: #d97706; border-color: #d97706; color: #ffffff !important; display: inline-flex; align-items: center; gap: 0.25rem;" title="ส่งคืนคำร้องให้พนักงานสอบสวนแก้ไข/แนบไฟล์ใหม่">
           <i class="fa-solid fa-rotate-left"></i> ส่งคืน
@@ -2970,7 +3020,7 @@ function renderCourtRowHTML(c) {
   return `
     <td data-order="${c.type || ''}">${typeBadge}</td>
     <td data-order="${c.caseNumber || ''}"><b>${c.caseNumber}</b></td>
-    <td data-order="${c.station || ''}">${c.station || '<span style="color:#d97706;">รอจับคู่</span>'} ${returnedBadge}</td>
+    <td data-order="${c.station || ''}">${c.station || '<span style="color:#d97706;">รอจับคู่</span>'} ${returnedBadge} ${courtFlagBadge}</td>
     <td data-order="${c.officer || ''}">
       ${c.officer || '<span style="color:#b45309;">ไม่มีเจ้าของ</span>'}
       ${(!c.closed && c.station) ? `<button onclick="openTransferModal('${c.caseNumber}')" class="btn-secondary" style="padding: 0.15rem 0.35rem; font-size: 0.7rem; width: auto; margin-left: 0.25rem;" title="โอนย้ายคดีให้พนักงานสอบสวนอื่น"><i class="fa-solid fa-arrow-right-arrow-left"></i></button>` : ''}
@@ -2983,7 +3033,7 @@ function renderCourtRowHTML(c) {
       ${!c.closed ? `<button onclick="openEditCapModal('${c.caseNumber}')" class="btn-secondary" style="padding: 0.15rem 0.35rem; font-size: 0.7rem; width: auto; margin-left: 0.25rem;" title="แก้ไขเพดานฝากขัง"><i class="fa-solid fa-pen"></i></button>` : ''}
     </td>
     <td data-order="${c.status || ''}">${renderStatusBadge(c.status)}</td>
-    <td data-order="${c.fileName ? 1 : 0}">${fileCell}</td>
+    <td data-order="${(c.fileName && !c.courtFlag) ? 1 : 0}">${fileCell}</td>
     <td style="white-space: nowrap; width: 1%;">
       <div class="table-actions-cell">
         ${courtActions}
@@ -3012,9 +3062,11 @@ function renderCourtRequestsTable() {
   const holidays = getHolidays();
   const enriched = rawRequests.map(r => enrichCase(r, holidays));
 
-  // Update today's documents count badge
+  // Update today's documents count badge (เฉพาะรายการที่ไม่มีการส่งคืน)
   const todayISO = toISO(new Date());
   const todayDocs = enriched.filter(c => 
+    !c.closed &&
+    !c.courtFlag &&
     (c.filingDeadline === todayISO || (c.uploadedAt && c.uploadedAt.startsWith(todayISO))) &&
     c.fileName
   );
@@ -3028,13 +3080,15 @@ function renderCourtRequestsTable() {
 
   if (statusFilter) {
     if (statusFilter === 'uploaded') {
-      filtered = filtered.filter(c => c.fileName || c.status === 'uploaded' || c.status === 'downloaded');
+      filtered = filtered.filter(c => (c.fileName || c.status === 'uploaded' || c.status === 'downloaded') && !c.courtFlag);
+    } else if (statusFilter === 'returned') {
+      filtered = filtered.filter(c => Boolean(c.courtFlag) || c.status === 'returned');
     } else if (statusFilter === 'due') {
       filtered = filtered.filter(c => c.status === 'due' || (c.daysRemaining !== null && c.daysRemaining >= 0 && c.daysRemaining <= 3));
     } else if (statusFilter === 'blocked') {
       filtered = filtered.filter(c => c.status === 'blocked');
     } else if (statusFilter === 'pending') {
-      filtered = filtered.filter(c => !c.fileName && !c.closed && c.status !== 'blocked');
+      filtered = filtered.filter(c => (!c.fileName || Boolean(c.courtFlag)) && !c.closed && c.status !== 'blocked');
     } else {
       filtered = filtered.filter(c => c.status === statusFilter);
     }
@@ -3049,8 +3103,9 @@ function renderCourtRequestsTable() {
   }
 
   // Separate into 2 groups: Uploaded vs Pending (ยังไม่อัพโหลด)
-  const uploadedCases = filtered.filter(c => Boolean(c.fileName));
-  const pendingCases = filtered.filter(c => !c.fileName);
+  // รายการที่ส่งคืน (courtFlag) จะต้องถูกเคลียร์ออกจากรายการยื่นคำร้องที่อัพโหลดไฟล์แล้วทันที
+  const uploadedCases = filtered.filter(c => Boolean(c.fileName) && !c.courtFlag);
+  const pendingCases = filtered.filter(c => !c.fileName || Boolean(c.courtFlag));
 
   // Sort both groups: Group by Station and sort Case Numbers from lowest to highest
   const sortedUploaded = sortCourtCases(uploadedCases);
@@ -3419,6 +3474,8 @@ async function downloadTodayAllDocuments() {
   const enriched = rawRequests.map(r => enrichCase(r, holidays));
 
   const todayDocs = enriched.filter(c => 
+    !c.closed &&
+    !c.courtFlag &&
     (c.filingDeadline === todayISO || (c.uploadedAt && c.uploadedAt.startsWith(todayISO))) &&
     c.fileName
   );
@@ -3730,6 +3787,459 @@ function clearDownloadHistoryPrompt() {
   });
 }
 window.clearDownloadHistoryPrompt = clearDownloadHistoryPrompt;
+
+// --------------------------------------------------------------------------
+// 8.1 RETURN HISTORY ENGINE (ประวัติการส่งคืนคำร้องให้พนักงานสอบสวน)
+// --------------------------------------------------------------------------
+
+const RETURN_HISTORY_STORAGE_KEY = 'eredt_return_history';
+
+function getReturnHistory() {
+  try {
+    const raw = localStorage.getItem(RETURN_HISTORY_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    return [];
+  }
+}
+window.getReturnHistory = getReturnHistory;
+
+function saveReturnHistory(history) {
+  try {
+    localStorage.setItem(RETURN_HISTORY_STORAGE_KEY, JSON.stringify(history));
+  } catch (e) {
+    console.error('Failed to save return history:', e);
+  }
+}
+window.saveReturnHistory = saveReturnHistory;
+
+function recordReturnHistory(item) {
+  const history = getReturnHistory();
+  const entry = {
+    id: 'ret_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+    ...item
+  };
+  history.unshift(entry);
+  if (history.length > 500) history.length = 500;
+  saveReturnHistory(history);
+}
+window.recordReturnHistory = recordReturnHistory;
+
+function getOfficerFullName(officerIdentifier, userList = null) {
+  if (!officerIdentifier) return '-';
+  const users = userList || getUsers();
+  const found = users.find(u => 
+    (u.username && u.username.toLowerCase() === String(officerIdentifier).toLowerCase()) ||
+    (u.name && u.name.trim() === String(officerIdentifier).trim())
+  );
+  if (found && found.name) return found.name;
+  return officerIdentifier;
+}
+window.getOfficerFullName = getOfficerFullName;
+
+function getAllReturnHistory() {
+  const localHistory = getReturnHistory();
+  const historyMap = new Map();
+
+  // 1. Add entries from local storage log
+  localHistory.forEach(item => {
+    const key = `${item.caseNumber}_${item.returnedAt || item.timestamp}_${item.reason || ''}`;
+    historyMap.set(key, item);
+  });
+
+  // 2. Extract and merge return events from all case history in system
+  const rawRequests = getRequests();
+  const users = getUsers();
+
+  rawRequests.forEach(c => {
+    const officerFullName = getOfficerFullName(c.officer, users);
+
+    // Check case history array
+    if (Array.isArray(c.history)) {
+      c.history.forEach(h => {
+        if (h.type === 'court_returned' || (h.title && h.title.includes('ส่งคืน'))) {
+          const retTime = h.timestamp || c.courtFlag?.flaggedAt || '';
+          const reason = h.note || c.courtFlag?.reason || '';
+          const key = `${c.caseNumber}_${retTime}_${reason}`;
+          if (!historyMap.has(key)) {
+            historyMap.set(key, {
+              id: 'ret_case_' + (c.caseNumber || '').replace(/[\/\\]/g, '_') + '_' + (retTime || Date.now()),
+              caseNumber: c.caseNumber,
+              caseType: c.type || 'ฝ.',
+              k: c.k || 1,
+              station: c.station || '-',
+              officer: c.officer || '-',
+              officerName: officerFullName,
+              reason: reason || 'เอกสารไม่ถูกต้อง กรุณาแนบไฟล์ใหม่',
+              previousFileName: h.previousFile || c.courtFlag?.previousFileName || '-',
+              returnedAt: retTime,
+              returnedBy: h.by || 'เจ้าหน้าที่ศาล'
+            });
+          }
+        }
+      });
+    }
+
+    // Check active courtFlag
+    if (c.courtFlag && c.courtFlag.flaggedAt) {
+      const key = `${c.caseNumber}_${c.courtFlag.flaggedAt}_${c.courtFlag.reason || ''}`;
+      if (!historyMap.has(key)) {
+        historyMap.set(key, {
+          id: 'ret_flag_' + (c.caseNumber || '').replace(/[\/\\]/g, '_'),
+          caseNumber: c.caseNumber,
+          caseType: c.type || 'ฝ.',
+          k: c.k || 1,
+          station: c.station || '-',
+          officer: c.officer || '-',
+          officerName: officerFullName,
+          reason: c.courtFlag.reason || 'เอกสารไม่ถูกต้อง กรุณาแนบไฟล์ใหม่',
+          previousFileName: c.courtFlag.previousFileName || '-',
+          returnedAt: c.courtFlag.flaggedAt,
+          returnedBy: c.courtReturn?.by || 'เจ้าหน้าที่ศาล'
+        });
+      }
+    }
+  });
+
+  const allItems = Array.from(historyMap.values());
+  // Sort descending by returnedAt timestamp
+  allItems.sort((a, b) => new Date(b.returnedAt || 0) - new Date(a.returnedAt || 0));
+  return allItems;
+}
+window.getAllReturnHistory = getAllReturnHistory;
+
+function renderReturnHistoryTable() {
+  if (!currentUser) return;
+
+  // Populate Station dropdown if not yet populated
+  const stationSelect = document.getElementById('returnHistoryStationFilter');
+  if (stationSelect && stationSelect.options.length <= 1) {
+    stationSelect.innerHTML = `<option value="all">ทุกสถานีตำรวจ (23 สภ.)</option>`;
+    UDON_STATIONS.forEach(st => {
+      stationSelect.innerHTML += `<option value="${st}">${st}</option>`;
+    });
+  }
+
+  const selectedStation = document.getElementById('returnHistoryStationFilter')?.value || 'all';
+  const searchTerm = (document.getElementById('returnHistorySearchInput')?.value || '').toLowerCase().trim();
+
+  let list = getAllReturnHistory();
+  if (selectedStation !== 'all') {
+    list = list.filter(item => item.station === selectedStation);
+  }
+
+  if (searchTerm) {
+    list = list.filter(item => 
+      (item.caseNumber && item.caseNumber.toLowerCase().includes(searchTerm)) ||
+      (item.station && item.station.toLowerCase().includes(searchTerm)) ||
+      (item.officer && item.officer.toLowerCase().includes(searchTerm)) ||
+      (item.officerName && item.officerName.toLowerCase().includes(searchTerm)) ||
+      (item.reason && item.reason.toLowerCase().includes(searchTerm)) ||
+      (item.previousFileName && item.previousFileName.toLowerCase().includes(searchTerm)) ||
+      (item.returnedBy && item.returnedBy.toLowerCase().includes(searchTerm))
+    );
+  }
+
+  const badgeEl = document.getElementById('returnHistoryCountBadge');
+  if (badgeEl) {
+    badgeEl.textContent = `${list.length} รายการ`;
+  }
+
+  const isDesktop = (window.innerWidth >= 768);
+
+  if (typeof jQuery !== 'undefined' && typeof jQuery.fn.DataTable !== 'undefined') {
+    jQuery.fn.dataTable.ext.errMode = 'none';
+    const dtEl = $('#returnHistoryDataTable');
+    if (dtEl.length && $.fn.DataTable.isDataTable(dtEl)) {
+      dtEl.DataTable().destroy();
+    }
+  }
+
+  const tbody = document.getElementById('returnHistoryTableBody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  if (list.length === 0) {
+    if (!isDesktop) {
+      tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: var(--text-muted); padding: 2rem;">ไม่พบข้อมูลประวัติการส่งคืนคำร้อง</td></tr>`;
+    }
+  } else {
+    list.forEach((item, idx) => {
+      const typeBadge = item.caseType === 'ยฝ.' 
+        ? '<span class="badge badge-type-yf">ยฝ.</span>' 
+        : '<span class="badge badge-type-f">ฝ.</span>';
+
+      let returnedDateStr = '-';
+      if (item.returnedAt) {
+        const d = new Date(item.returnedAt);
+        returnedDateStr = `${formatThaiDate(item.returnedAt)} ${d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })} น.`;
+      }
+
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td style="text-align: center; font-weight: 600; color: #64748b;">${idx + 1}</td>
+        <td><b style="color: #b45309;">${returnedDateStr}</b></td>
+        <td>${typeBadge}</td>
+        <td><b>${item.caseNumber || '-'}</b></td>
+        <td style="text-align: center;">ครั้งที่ ${item.k || 1}</td>
+        <td><i class="fa-solid fa-building-shield" style="color: #64748b;"></i> ${item.station || '-'}</td>
+        <td>
+          <div style="font-weight: 600; color: #1e293b;">${item.officerName || item.officer || '-'}</div>
+          ${item.officer && item.officer !== item.officerName ? `<div style="font-size: 0.75rem; color: #64748b;">(@${item.officer})</div>` : ''}
+        </td>
+        <td>
+          <div style="background: #fffbeb; border: 1px solid #fed7aa; border-radius: 4px; padding: 0.3rem 0.5rem; font-size: 0.8rem; color: #9a3412;">
+            <i class="fa-solid fa-triangle-exclamation"></i> ${item.reason || 'เอกสารไม่ถูกต้อง'}
+          </div>
+        </td>
+        <td>
+          <div style="font-family: monospace; font-size: 0.8rem; color: #dc2626;">
+            ${item.previousFileName && item.previousFileName !== '-' ? `<i class="fa-solid fa-file-pdf"></i> ${item.previousFileName}` : '-'}
+          </div>
+        </td>
+        <td><i class="fa-solid fa-user-shield" style="color: #0284c7;"></i> ${item.returnedBy || 'เจ้าหน้าที่ศาล'}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  if (isDesktop && typeof jQuery !== 'undefined' && typeof jQuery.fn.DataTable !== 'undefined') {
+    $('#returnHistoryDataTable').DataTable({
+      pageLength: 25,
+      lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "ทั้งหมด"]],
+      order: [],
+      language: {
+        search: "ค้นหาในตาราง:",
+        lengthMenu: "แสดง _MENU_ รายการต่อหน้า",
+        info: "แสดง _START_ ถึง _END_ จากทั้งหมด _TOTAL_ รายการ",
+        infoEmpty: "แสดง 0 ถึง 0 จาก 0 รายการ",
+        infoFiltered: "(กรองจากทั้งหมด _MAX_ รายการ)",
+        zeroRecords: "ไม่พบข้อมูลตรงตามเงื่อนไขการค้นหา",
+        emptyTable: "ยังไม่มีประวัติการส่งคืนคำร้อง",
+        paginate: {
+          first: '<i class="fa-solid fa-angles-left"></i>',
+          last: '<i class="fa-solid fa-angles-right"></i>',
+          next: '<i class="fa-solid fa-angle-right"></i>',
+          previous: '<i class="fa-solid fa-angle-left"></i>'
+        }
+      },
+      dom: '<"top"l>rt<"bottom"ip><"clear">',
+      responsive: true
+    });
+  }
+}
+window.renderReturnHistoryTable = renderReturnHistoryTable;
+
+function printReturnHistoryReport() {
+  const selectedStation = document.getElementById('returnHistoryStationFilter')?.value || 'all';
+  let list = getAllReturnHistory();
+  if (selectedStation !== 'all') {
+    list = list.filter(item => item.station === selectedStation);
+  }
+
+  if (list.length === 0) {
+    Swal.fire({
+      icon: 'info',
+      title: 'ไม่พบข้อมูลประวัติการส่งคืน',
+      text: selectedStation === 'all' 
+        ? 'ยังไม่มีประวัติการส่งคืนคำร้องในระบบ' 
+        : `ยังไม่มีประวัติการส่งคืนคำร้องของ ${selectedStation}`
+    });
+    return;
+  }
+
+  const stationTitle = selectedStation === 'all' ? 'ทุกสถานีตำรวจในสังกัด ภ.จว.อุดรธานี (23 สภ.)' : selectedStation;
+  const printDateStr = formatThaiDate(toISO(new Date()), true) + ' เวลา ' + new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) + ' น.';
+
+  let rowsHtml = '';
+  list.forEach((item, index) => {
+    let returnedDateStr = '-';
+    if (item.returnedAt) {
+      const d = new Date(item.returnedAt);
+      returnedDateStr = `${formatThaiDate(item.returnedAt)}<br><span style="font-size: 10pt; color: #475569;">${d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })} น.</span>`;
+    }
+
+    const typeStr = item.caseType === 'ยฝ.' ? 'ยฝ.' : 'ฝ.';
+
+    rowsHtml += `
+      <tr>
+        <td style="text-align: center; border: 1px solid #334155; padding: 6px 6px;">${index + 1}</td>
+        <td style="text-align: center; border: 1px solid #334155; padding: 6px 6px; white-space: nowrap;">${returnedDateStr}</td>
+        <td style="text-align: center; border: 1px solid #334155; padding: 6px 6px; font-weight: bold;">${typeStr}</td>
+        <td style="text-align: center; border: 1px solid #334155; padding: 6px 6px; font-weight: bold; font-family: 'Consolas', monospace; font-size: 12pt;">${item.caseNumber || '-'}</td>
+        <td style="text-align: center; border: 1px solid #334155; padding: 6px 6px;">ครั้งที่ ${item.k || 1}</td>
+        <td style="border: 1px solid #334155; padding: 6px 8px;">${item.station || '-'}</td>
+        <td style="border: 1px solid #334155; padding: 6px 8px;">${item.officerName || item.officer || '-'}</td>
+        <td style="border: 1px solid #334155; padding: 6px 8px; color: #b45309;">${item.reason || '-'}</td>
+        <td style="border: 1px solid #334155; padding: 6px 8px; font-family: monospace; font-size: 10pt; word-break: break-all;">${item.previousFileName || '-'}</td>
+        <td style="text-align: center; border: 1px solid #334155; padding: 6px 8px;">${item.returnedBy || 'ศาล'}</td>
+      </tr>
+    `;
+  });
+
+  const printWindow = window.open('', '_blank', 'width=1100,height=850');
+  if (!printWindow) {
+    Swal.fire({
+      icon: 'warning',
+      title: 'เบราว์เซอร์บล็อกหน้าต่างใหม่ (Pop-up Blocked)',
+      text: 'กรุณาอนุญาตให้เปิดหน้าต่าง Pop-up เพื่อพิมพ์เอกสาร'
+    });
+    return;
+  }
+
+  const printHtml = `
+    <!DOCTYPE html>
+    <html lang="th">
+    <head>
+      <meta charset="UTF-8">
+      <title>รายงานประวัติการส่งคืนคำร้องขอฝากขัง - ศาลจังหวัดอุดรธานี</title>
+      <link rel="preconnect" href="https://fonts.googleapis.com">
+      <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+      <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+      <style>
+        body {
+          font-family: 'Sarabun', 'TH Sarabun New', sans-serif;
+          font-size: 11.5pt;
+          line-height: 1.35;
+          color: #0f172a;
+          margin: 10mm 12mm;
+          background: #fff;
+        }
+        .header-title {
+          text-align: center;
+          margin-bottom: 16px;
+        }
+        .header-title h2 {
+          margin: 0 0 4px 0;
+          font-size: 17pt;
+          font-weight: 700;
+        }
+        .header-title h3 {
+          margin: 0 0 4px 0;
+          font-size: 14pt;
+          font-weight: 600;
+          color: #b45309;
+        }
+        .header-title p {
+          margin: 0;
+          font-size: 11pt;
+          color: #334155;
+        }
+        table {
+          width: 100%;
+          border-collapse: collapse;
+          margin-top: 12px;
+          margin-bottom: 20px;
+        }
+        th {
+          border: 1px solid #334155;
+          background-color: #f8fafc;
+          padding: 6px 6px;
+          font-weight: 700;
+          text-align: center;
+          font-size: 11pt;
+        }
+        td {
+          font-size: 11pt;
+        }
+        .footer-sign {
+          margin-top: 30px;
+          display: flex;
+          justify-content: space-between;
+          page-break-inside: avoid;
+        }
+        .sign-box {
+          text-align: center;
+          width: 40%;
+        }
+        .sign-line {
+          margin-top: 45px;
+          border-bottom: 1px dotted #334155;
+          margin-bottom: 6px;
+        }
+        .no-print-bar {
+          background: #0f172a;
+          color: #fff;
+          padding: 12px 24px;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          z-index: 9999;
+          font-family: 'Sarabun', sans-serif;
+          box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        }
+        @media print {
+          .no-print-bar { display: none !important; }
+          body { margin: 8mm; }
+          @page { size: A4 landscape; margin: 8mm; }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="no-print-bar">
+        <span><b>พิมพ์เอกสาร A4 แนวนอน:</b> รายงานประวัติการส่งคืนคำร้องขอฝากขัง (${list.length} รายการ)</span>
+        <div>
+          <button onclick="window.print()" style="background: #059669; color: #fff; border: none; padding: 8px 20px; font-size: 14px; font-weight: bold; border-radius: 6px; cursor: pointer; margin-right: 8px;">🖨️ สั่งพิมพ์ / บันทึก PDF (A4 แนวนอน)</button>
+          <button onclick="window.close()" style="background: #475569; color: #fff; border: none; padding: 8px 14px; font-size: 14px; border-radius: 6px; cursor: pointer;">ปิด</button>
+        </div>
+      </div>
+
+      <div style="margin-top: 45px;">
+        <div class="header-title">
+          <h2>ศาลจังหวัดอุดรธานี</h2>
+          <h3>รายงานประวัติการส่งคืนคำร้องขอฝากขังให้พนักงานสอบสวนแก้ไข (e-REDT)</h3>
+          <p><b>สถานีตำรวจ:</b> ${stationTitle} | <b>จำนวนรายการส่งคืนทั้งหมด:</b> ${list.length} รายการ</p>
+          <p style="font-size: 10pt; color: #64748b;">ข้อมูล ณ วันที่: ${printDateStr}</p>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 35px;">ลำดับ</th>
+              <th style="width: 105px;">วัน-เวลาส่งคืน</th>
+              <th style="width: 40px;">ประเภท</th>
+              <th style="width: 90px;">เลขฝากขัง</th>
+              <th style="width: 60px;">ครั้งที่</th>
+              <th style="width: 130px;">สถานีตำรวจ (สภ.)</th>
+              <th style="width: 150px;">พนักงานสอบสวน</th>
+              <th>เหตุผลที่ศาลส่งคืน</th>
+              <th style="width: 140px;">ไฟล์เดิมที่ยกเลิก</th>
+              <th style="width: 100px;">ผู้ส่งคืน</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml}
+          </tbody>
+        </table>
+
+        <div class="footer-sign">
+          <div class="sign-box">
+            <div class="sign-line"></div>
+            <div>(.......................................................................)</div>
+            <div style="margin-top: 4px; font-weight: 500;">เจ้าหน้าที่ผู้ตรวจสอบและรายงาน (ศาลจังหวัดอุดรธานี)</div>
+            <div style="margin-top: 4px;">วันที่ .......... / .......... / ..........</div>
+          </div>
+          <div class="sign-box">
+            <div class="sign-line"></div>
+            <div>(.......................................................................)</div>
+            <div style="margin-top: 4px; font-weight: 500;">ผู้อำนวยการฯ / หัวหน้าส่วนงานที่ได้รับมอบหมาย</div>
+            <div style="margin-top: 4px;">วันที่ .......... / .......... / ..........</div>
+          </div>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  printWindow.document.open();
+  printWindow.document.write(printHtml);
+  printWindow.document.close();
+}
+window.printReturnHistoryReport = printReturnHistoryReport;
 
 function openEditCapModal(caseNumber) {
   const requests = getRequests();
@@ -4230,6 +4740,22 @@ function handleConfirmFlagWrongFile(event) {
           k: targetCase.k || 1
         });
 
+        // Record to persistent Return History
+        if (typeof recordReturnHistory === 'function') {
+          recordReturnHistory({
+            caseNumber: targetCase.caseNumber,
+            caseType: targetCase.type || 'ฝ.',
+            k: targetCase.k || 1,
+            station: targetCase.station || '',
+            officer: targetCase.officer || '',
+            officerName: typeof getOfficerFullName === 'function' ? getOfficerFullName(targetCase.officer) : targetCase.officer,
+            reason: reason,
+            previousFileName: oldFileName || '-',
+            returnedAt: toISO(new Date()),
+            returnedBy: (typeof currentUser !== 'undefined' && currentUser) ? (currentUser.name || currentUser.username) : 'เจ้าหน้าที่ศาล'
+          });
+        }
+
         closeModal('flagWrongFileModal');
         Swal.fire({ 
           icon: 'success', 
@@ -4244,8 +4770,9 @@ function handleConfirmFlagWrongFile(event) {
           showConfirmButton: false 
         });
         renderCourtRequestsTable();
-        if (typeof currentActiveView !== 'undefined' && currentActiveView === 'dashboard') {
-          renderDashboard();
+        if (typeof currentActiveView !== 'undefined') {
+          if (currentActiveView === 'dashboard') renderDashboard();
+          if (currentActiveView === 'returns') renderReturnHistoryTable();
         }
       } else {
         Swal.fire({ icon: 'error', title: 'ส่งคืนคำร้องไม่สำเร็จ', text: res.reason });
@@ -4412,9 +4939,12 @@ function renderAdminView() {
       </td>
       <td style="white-space: nowrap;">
         <div style="display: inline-flex; align-items: center; gap: 0.35rem;">
-          <code style="background: #f8fafc; border: 1.5px solid #cbd5e1; padding: 0.2rem 0.45rem; border-radius: 0.35rem; font-family: monospace; font-size: 0.85rem; color: #0f172a; font-weight: 700;">${u.password || '-'}</code>
+          <code id="pwd-${u.username}" style="background: #f8fafc; border: 1.5px solid #cbd5e1; padding: 0.2rem 0.45rem; border-radius: 0.35rem; font-family: monospace; font-size: 0.85rem; color: #0f172a; font-weight: 700;">••••••••</code>
           ${u.password ? `
-            <button onclick="copyToClipboard('${u.password}', 'Password: ${u.password}')" type="button" class="btn-icon-copy" title="คัดลอก Password">
+            <button onclick="togglePasswordVisibilityAdmin('${u.username}')" type="button" class="btn-icon-copy" title="ดู/ซ่อน Password" id="pwd-btn-${u.username}">
+              <i class="fa-regular fa-eye"></i>
+            </button>
+            <button onclick="copyPasswordWithAuth('${u.username}')" type="button" class="btn-icon-copy" title="คัดลอก Password">
               <i class="fa-regular fa-copy"></i>
             </button>
           ` : ''}
@@ -4434,6 +4964,96 @@ function renderAdminView() {
     `;
     tbody.appendChild(tr);
   });
+}
+
+// สถานะการยืนยันตัวตนแอดมินสำหรับดูรหัสผ่าน (หมดอายุหลัง 60 วินาที)
+let adminPasswordVerifiedAt = 0;
+
+function isAdminPasswordSessionValid() {
+  return (Date.now() - adminPasswordVerifiedAt) < 60000;
+}
+
+async function verifyAdminPassword() {
+  if (isAdminPasswordSessionValid()) return true;
+  
+  const result = await Swal.fire({
+    title: 'ยืนยันตัวตนผู้ดูแลระบบ',
+    html: '<p style="font-size: 0.9rem; color: #64748b;">กรุณากรอกรหัสผ่านของผู้ดูแลระบบเพื่อดูรหัสผ่านผู้ใช้งาน</p>',
+    input: 'password',
+    inputPlaceholder: 'รหัสผ่านผู้ดูแลระบบ',
+    inputAttributes: { autocomplete: 'off' },
+    showCancelButton: true,
+    confirmButtonText: 'ยืนยัน',
+    cancelButtonText: 'ยกเลิก',
+    confirmButtonColor: '#0284c7',
+    preConfirm: (inputPassword) => {
+      if (!inputPassword) {
+        Swal.showValidationMessage('กรุณากรอกรหัสผ่าน');
+        return false;
+      }
+      if (!currentUser) {
+        Swal.showValidationMessage('ไม่พบข้อมูลผู้ใช้ปัจจุบัน');
+        return false;
+      }
+      if (String(inputPassword) !== String(currentUser.password)) {
+        Swal.showValidationMessage('รหัสผ่านไม่ถูกต้อง');
+        return false;
+      }
+      return true;
+    }
+  });
+  
+  if (result.isConfirmed) {
+    adminPasswordVerifiedAt = Date.now();
+    return true;
+  }
+  return false;
+}
+
+async function togglePasswordVisibilityAdmin(username) {
+  const el = document.getElementById('pwd-' + username);
+  const btnEl = document.getElementById('pwd-btn-' + username);
+  if (!el) return;
+  
+  // ถ้ากำลังแสดงอยู่ ให้ซ่อน
+  if (el.dataset.visible === 'true') {
+    el.textContent = '••••••••';
+    el.dataset.visible = 'false';
+    if (btnEl) btnEl.innerHTML = '<i class="fa-regular fa-eye"></i>';
+    return;
+  }
+  
+  // ยืนยันตัวตนแอดมินก่อนเปิดดู
+  const verified = await verifyAdminPassword();
+  if (!verified) return;
+  
+  const users = getUsers();
+  const user = users.find(u => u.username === username);
+  if (!user) return;
+  
+  el.textContent = user.password || '-';
+  el.dataset.visible = 'true';
+  if (btnEl) btnEl.innerHTML = '<i class="fa-regular fa-eye-slash"></i>';
+  
+  // Auto-hide หลัง 5 วินาที
+  setTimeout(() => {
+    if (el.dataset.visible === 'true') {
+      el.textContent = '••••••••';
+      el.dataset.visible = 'false';
+      if (btnEl) btnEl.innerHTML = '<i class="fa-regular fa-eye"></i>';
+    }
+  }, 5000);
+}
+
+async function copyPasswordWithAuth(username) {
+  const verified = await verifyAdminPassword();
+  if (!verified) return;
+  
+  const users = getUsers();
+  const user = users.find(u => u.username === username);
+  if (!user || !user.password) return;
+  
+  copyToClipboard(user.password, 'Password: ' + user.password);
 }
 
 /**
@@ -5819,7 +6439,7 @@ async function testGoogleConnection() {
 
   const startTime = Date.now();
   try {
-    const res = await fetch(`${scriptUrl}?action=getRequests`, { method: 'GET' });
+    const res = await fetch(`${scriptUrl}?key=${EREDT_API_KEY}&action=getRequests`, { method: 'GET' });
     const responseTime = Date.now() - startTime;
     
     if (res.ok) {
@@ -6377,6 +6997,7 @@ function refreshActiveView() {
 function renderStatusBadge(status) {
   const badges = {
     closed: '<span class="badge badge-status-closed"><i class="fa-solid fa-lock"></i> ปิดคดีแล้ว</span>',
+    returned: '<span class="badge" style="background: #fef3c7; color: #b45309; border: 1px solid #fcd34d; font-weight: 700; white-space: nowrap;"><i class="fa-solid fa-rotate-left"></i> ส่งคืนให้แก้ไข</span>',
     file_expired: '<span class="badge badge-status-overdue"><i class="fa-solid fa-file-circle-xmark"></i> ไฟล์หมดอายุ — กรุณาอัพโหลดใหม่</span>',
     downloaded: '<span class="badge badge-status-downloaded"><i class="fa-solid fa-check-double"></i> ศาลรับเรื่องแล้ว</span>',
     uploaded: '<span class="badge badge-status-uploaded"><i class="fa-solid fa-file-pdf"></i> อัพโหลดแล้ว</span>',

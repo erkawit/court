@@ -108,6 +108,11 @@
               <i class="fa-solid fa-clock-rotate-left" style="color: #38bdf8;"></i> <span>ประวัติการดาวน์โหลดไฟล์</span>
             </a>
           </li>
+          <li id="navItemReturnHistory">
+            <a id="navItemReturnHistoryLink" href="javascript:void(0)" onclick="switchView('returns', event)" class="sidebar-item">
+              <i class="fa-solid fa-file-circle-xmark" style="color: #f59e0b;"></i> <span>ประวัติการส่งคืนคำร้อง</span>
+            </a>
+          </li>
 
           <!-- COURT MENUS -->
           <li id="navCategoryCourt" class="sidebar-menu-category">การจัดการศาล</li>
@@ -395,9 +400,10 @@
                   <!-- Options generated dynamically in app.js -->
                 </select>
 
-                <select id="courtStatusFilter" onchange="renderCourtRequestsTable()" class="form-control" style="width: 160px;">
+                <select id="courtStatusFilter" onchange="renderCourtRequestsTable()" class="form-control" style="width: 170px;">
                   <option value="">ทุกสถานะ</option>
                   <option value="uploaded">ยื่นแล้ว</option>
+                  <option value="returned">ส่งคืนให้แก้ไข</option>
                   <option value="due">ใกล้ครบกำหนด</option>
                   <option value="blocked">เลยเวลา</option>
                   <option value="pending">รอถึงกำหนด</option>
@@ -530,6 +536,67 @@
                 </tr>
               </thead>
               <tbody id="downloadHistoryTableBody">
+                <!-- Rendered via app.js -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- 5. RETURN HISTORY VIEW (ประวัติการส่งคืนคำร้องให้พนักงานสอบสวน) -->
+      <div id="returnsView" class="animate-fade-in" style="display: none;">
+        <div class="view-header">
+          <div class="view-title">
+            <h2><i class="fa-solid fa-file-circle-xmark" style="color: #d97706;"></i> ประวัติการส่งคืนคำร้องให้พนักงานสอบสวน</h2>
+            <p>บันทึกประวัติการส่งคืนคำร้องขอฝากขังกลับไปยังพนักงานสอบสวน 23 สภ. เพื่อให้แก้ไขเอกสารหรือแนบไฟล์ใหม่ พร้อมพิมพ์รายงานสรุป A4 แนวนอน (PDF)</p>
+          </div>
+          <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            <button onclick="printReturnHistoryReport()" class="btn-primary" style="width: auto; background: linear-gradient(135deg, #b45309, #d97706); border: none; box-shadow: 0 2px 6px rgba(217, 119, 6, 0.3);">
+              <i class="fa-solid fa-print"></i> พิมพ์รายงานประวัติการส่งคืน (A4 แนวนอน)
+            </button>
+            <button onclick="renderReturnHistoryTable()" class="btn-secondary" style="width: auto;">
+              <i class="fa-solid fa-rotate" style="color: #ffffff;"></i> รีเฟรช
+            </button>
+          </div>
+        </div>
+
+        <div class="white-panel" style="padding: 1.5rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; flex-wrap: wrap; gap: 1rem;">
+            <h3 style="font-size: 1.1rem; font-weight: 700; display: flex; align-items: center; gap: 0.5rem; margin: 0; color: #b45309;">
+              <i class="fa-solid fa-list-check" style="color: #d97706;"></i> รายการประวัติการส่งคืนคำร้อง
+              <span id="returnHistoryCountBadge" class="badge" style="background: #d97706; color: #ffffff; font-size: 0.8rem; padding: 0.2rem 0.65rem; border-radius: 9999px; font-weight: 700;">0 รายการ</span>
+            </h3>
+            
+            <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center;">
+              <select id="returnHistoryStationFilter" onchange="renderReturnHistoryTable()" class="form-control" style="width: 200px;">
+                <option value="all">ทุกสถานีตำรวจ (23 สภ.)</option>
+                <!-- Generated dynamically in app.js -->
+              </select>
+
+              <div style="position: relative;">
+                <input type="text" id="returnHistorySearchInput" oninput="renderReturnHistoryTable()" class="form-control" placeholder="ค้นหาเลขฝากขัง / สภ. / พงส. / เหตุผล" style="padding-left: 2.2rem; width: 260px;">
+                <i class="fa-solid fa-magnifying-glass" style="position: absolute; left: 0.8rem; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 0.85rem;"></i>
+              </div>
+            </div>
+          </div>
+
+          <div class="table-container">
+            <table id="returnHistoryDataTable" class="data-table" style="width: 100%;">
+              <thead>
+                <tr>
+                  <th style="width: 45px;">ลำดับ</th>
+                  <th>วัน-เวลาที่ส่งคืน</th>
+                  <th>ประเภท</th>
+                  <th>เลขฝากขัง</th>
+                  <th>ครั้งที่ (ผัด)</th>
+                  <th>สถานีตำรวจ (สภ.)</th>
+                  <th>พนักงานสอบสวนผู้รับผิดชอบ</th>
+                  <th>เหตุผลที่ศาลส่งคืน</th>
+                  <th>ชื่อไฟล์เดิม</th>
+                  <th>ผู้ส่งคืน (ศาล)</th>
+                </tr>
+              </thead>
+              <tbody id="returnHistoryTableBody">
                 <!-- Rendered via app.js -->
               </tbody>
             </table>
