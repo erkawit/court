@@ -6836,7 +6836,9 @@ async function fetchLiveGoogleSheetData(options = {}) {
   async function safeFetchCsv(url) {
     try {
       // Use redirect: 'error' to prevent browser from following 302 login redirects to accounts.google.com
-      const res = await fetch(url, { method: 'GET', mode: 'cors', redirect: 'error' });
+      const separator = url.includes('?') ? '&' : '?';
+      const cacheBustUrl = `${url}${separator}_t=${Date.now()}`;
+      const res = await fetch(cacheBustUrl, { method: 'GET', mode: 'cors', cache: 'no-store', redirect: 'error' });
       if (!res.ok) return null;
       const txt = await res.text();
       if (!txt || txt.includes('<!DOCTYPE html>') || txt.includes('<html') || txt.includes('accounts.google.com')) {
@@ -6850,7 +6852,7 @@ async function fetchLiveGoogleSheetData(options = {}) {
 
   async function safeFetchJson(url) {
     try {
-      const res = await fetch(url, { method: 'GET', mode: 'cors' });
+      const res = await fetch(url, { method: 'GET', mode: 'cors', cache: 'no-store' });
       if (!res.ok) return null;
       if (res.redirected && res.url.includes('accounts.google.com')) return null;
       return await res.json();
@@ -6872,13 +6874,13 @@ async function fetchLiveGoogleSheetData(options = {}) {
     // 1. Primary: Fetch via Apps Script WebApp if scriptUrl configured
     if (scriptUrl && scriptUrl.trim() !== '') {
       updateProgress(35, 'กำลังโหลดข้อมูลคดี...');
-      requestsData = await safeFetchJson(`${scriptUrl}?action=getRequests`);
+      requestsData = await safeFetchJson(`${scriptUrl}?key=${EREDT_API_KEY}&action=getRequests&_t=${Date.now()}`);
 
       updateProgress(65, 'กำลังโหลดข้อมูลผู้ใช้งาน...');
-      usersData = await safeFetchJson(`${scriptUrl}?action=getUsers`);
+      usersData = await safeFetchJson(`${scriptUrl}?key=${EREDT_API_KEY}&action=getUsers&_t=${Date.now()}`);
 
       updateProgress(85, 'กำลังโหลดข้อมูลวันหยุด...');
-      holidaysData = await safeFetchJson(`${scriptUrl}?action=getHolidays`);
+      holidaysData = await safeFetchJson(`${scriptUrl}?key=${EREDT_API_KEY}&action=getHolidays&_t=${Date.now()}`);
     }
 
     // 2. CSV API Fallback (Public CSV Endpoint)
